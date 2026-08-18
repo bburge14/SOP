@@ -1,5 +1,6 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
+import { DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
 
 const FUNCTION_NAME = "emit_sop";
 
@@ -17,7 +18,7 @@ export class OpenAiAdapter implements LlmAdapter {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new LlmAdapterError("openai", "OPENAI_API_KEY is not set");
     this.apiKey = apiKey;
-    this.model = process.env.OPENAI_MODEL || "gpt-4o";
+    this.model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
   }
 
   async generate(systemPrompt: string, userPrompt: string): Promise<string> {

@@ -3,11 +3,20 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Settings2 } from "lucide-react";
 import type { DesktopProvider, DesktopSettings } from "@/types/electron";
+import { PROVIDER_INFO } from "@/lib/providerInfo";
+import { DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
+import ModelSelect from "@/components/ModelSelect";
 
 const PROVIDER_NEEDS_KEY: Record<DesktopProvider, boolean> = {
   openai: true,
   gemini: true,
   ollama: false,
+};
+
+const RECOMMENDED_MODEL: Record<DesktopProvider, string> = {
+  gemini: DEFAULT_GEMINI_MODEL,
+  openai: DEFAULT_OPENAI_MODEL,
+  ollama: "",
 };
 
 interface DesktopSettingsPanelProps {
@@ -48,7 +57,7 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
     const api = window.electronAPI;
     if (!api) return;
     if (PROVIDER_NEEDS_KEY[provider] && !apiKey.trim() && !settings?.hasApiKey) {
-      setError("This provider needs an API key.");
+      setError("This provider needs an API key — see the link above to get one.");
       return;
     }
 
@@ -69,6 +78,15 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
 
   const needsKeyNow = PROVIDER_NEEDS_KEY[provider];
   const unconfigured = settings ? !settings.isConfigured : false;
+  const info = PROVIDER_INFO[provider];
+
+  function handleProviderChange(next: DesktopProvider) {
+    setProvider(next);
+    // Switching provider mid-session: reset to that provider's recommended
+    // model rather than carrying over a model id from a different vendor.
+    if (next !== settings?.provider) setModel(RECOMMENDED_MODEL[next]);
+    setError(null);
+  }
 
   return (
     <div className="relative text-xs">
@@ -99,23 +117,27 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
             <label className="text-slate-400 block mb-1">Provider</label>
             <select
               value={provider}
-              onChange={(e) => setProvider(e.target.value as DesktopProvider)}
+              onChange={(e) => handleProviderChange(e.target.value as DesktopProvider)}
               className="w-full bg-canvas border border-border rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
             >
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
               <option value="ollama">Ollama (local)</option>
             </select>
+            <p className="text-slate-500 mt-1.5">{info.blurb}</p>
+            <a
+              href={info.linkUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 mt-1 inline-block"
+            >
+              {info.linkLabel}
+            </a>
           </div>
 
           <div>
-            <label className="text-slate-400 block mb-1">Model (optional)</label>
-            <input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="uses a sensible default"
-              className="w-full bg-canvas border border-border rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-            />
+            <label className="text-slate-400 block mb-1">Model</label>
+            <ModelSelect provider={provider} value={model} onChange={setModel} />
           </div>
 
           {needsKeyNow && (

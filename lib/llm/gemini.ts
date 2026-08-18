@@ -1,5 +1,6 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
+import { DEFAULT_GEMINI_MODEL } from "@/lib/llm/modelOptions";
 
 /**
  * Gemini takes the JSON Schema directly via generationConfig.responseSchema
@@ -15,7 +16,7 @@ export class GeminiAdapter implements LlmAdapter {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new LlmAdapterError("gemini", "GEMINI_API_KEY is not set");
     this.apiKey = apiKey;
-    this.model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    this.model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   }
 
   async generate(systemPrompt: string, userPrompt: string): Promise<string> {

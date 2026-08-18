@@ -41,6 +41,7 @@ lib/
   llm/
     types.ts               # LlmAdapter interface, LlmAdapterError
     schema.ts               # single source of truth: zod schema + JSON Schema
+    modelOptions.ts           # curated model IDs + recommended default per provider
     prompt.ts               # system/user prompt builders
     openai.ts                # GPT — function-calling, tool_choice forced
     gemini.ts                # Gemini — responseSchema + responseMimeType:json
@@ -51,6 +52,7 @@ lib/
     reconcile.ts              # validates + syncs variables[] against {{placeholders}}
     template.ts                # extractPlaceholders(), renderTemplate() — used by both
                                 # the server (reconcile) and the client (live preview)
+  providerInfo.ts             # onboarding copy: per-provider blurb + "get a key" link
 
 components/
   SopWorkspace.tsx          # owns all state, wires everything together
@@ -59,7 +61,11 @@ components/
   MarkdownPreview.tsx       # rendered/source tabs, live substitution
   ActionBar.tsx             # regenerate / add field / copy / export md / export pdf
   AddFieldDialog.tsx        # small popover form for custom variables
-  UpdatePanel.tsx            # header widget: check for updates / update now
+  ModelSelect.tsx            # provider-aware model dropdown (free text for Ollama)
+  UpdatePanel.tsx             # header widget: check for updates / update now (self-hosted, git-based)
+  DesktopUpdatePanel.tsx       # header widget: check for updates / update now (desktop, electron-updater)
+  DesktopSettingsPanel.tsx      # header gear icon: change provider/model/key after setup
+  DesktopOnboarding.tsx          # full-screen blocking first-run setup gate (desktop only)
 
 types/sop.ts                 # SopDocument, SopVariable, VariableValues, LlmProvider
 ```
@@ -160,8 +166,8 @@ bash scripts/uninstall.sh --remove-all # also delete the whole install directory
 | Variable | Required when | Notes |
 |---|---|---|
 | `LLM_PROVIDER` | always | `openai` \| `gemini` \| `ollama` — default `gemini` |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | `LLM_PROVIDER=openai` | model defaults to `gpt-4o` |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | `LLM_PROVIDER=gemini` | model defaults to `gemini-2.0-flash` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | `LLM_PROVIDER=openai` | model defaults to `gpt-5.6-terra` — see `lib/llm/modelOptions.ts` for current options |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | `LLM_PROVIDER=gemini` | model defaults to `gemini-3.6-flash` — see `lib/llm/modelOptions.ts` for current options |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `LLM_PROVIDER=ollama` | no API key; point at a running `ollama serve`, defaults to `http://localhost:11434` / `llama3.1` |
 
 ## Releases
