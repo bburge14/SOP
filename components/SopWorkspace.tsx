@@ -102,6 +102,58 @@ export default function SopWorkspace() {
     }
   }
 
+  async function handleImport(file: File) {
+    if (hasSop) {
+      const confirmed = window.confirm("Importing will discard your current field values and edits. Continue?");
+      if (!confirmed) return;
+    }
+
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setError("Could not read that file.");
+      return;
+    }
+    if (!text.trim()) {
+      setError("That file is empty.");
+      return;
+    }
+
+    // Best-effort title: first Markdown H1 in the file, else the filename.
+    const titleMatch = /^#\s+(.+)$/m.exec(text);
+    const derivedTitle = titleMatch?.[1]?.trim() || file.name.replace(/\.(md|markdown|txt)$/i, "");
+
+    // Same auto-detection SopWorkspace already uses when you hand-edit the
+    // Source tab (handleTemplateChange) — any {{key}} in the imported text
+    // becomes an editable field, with a sensible default type/label.
+    const placeholders = extractPlaceholders(text);
+    const importedVariables: SopVariable[] = placeholders.map((key) => ({
+      key,
+      label: humanizeKey(key),
+      description: "Detected from the imported document.",
+      default: "",
+      type: "string" as const,
+    }));
+
+    setTopic(derivedTitle);
+    setMeta({
+      title: derivedTitle,
+      category: "Imported",
+      overview: `Imported from ${file.name}.`,
+      prerequisites: [],
+    });
+    setVariables(importedVariables);
+    setValues(Object.fromEntries(importedVariables.map((v) => [v.key, v.default])));
+    setTemplate(text);
+    // Treated as user-added/removable, same as AddFieldDialog fields — these
+    // weren't declared by a trusted AI generation step.
+    setCustomKeys(new Set(importedVariables.map((v) => v.key)));
+    setPreviewMode("source");
+    setError(null);
+    setErrorDetail(null);
+  }
+
   function handleRegenerate() {
     if (hasSop) {
       const confirmed = window.confirm("Regenerating will discard your current field values and edits. Continue?");
@@ -231,7 +283,12 @@ export default function SopWorkspace() {
         <DesktopSettingsPanel />
       </header>
 
-      <TopicInput onSubmit={(t) => void generate(t)} loading={loading} initialValue={topic} />
+      <TopicInput
+        onSubmit={(t) => void generate(t)}
+        onImport={(f) => void handleImport(f)}
+        loading={loading}
+        initialValue={topic}
+      />
 
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-lg px-4 py-3">

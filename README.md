@@ -58,7 +58,7 @@ lib/
 
 components/
   SopWorkspace.tsx          # owns all state, wires everything together
-  TopicInput.tsx            # the single input bar
+  TopicInput.tsx            # the input bar, Import button, and privacy reminder
   VariableForm.tsx          # dynamic form generated from variables[]
   MarkdownPreview.tsx       # rendered/source tabs, live substitution
   ActionBar.tsx             # regenerate / add field / copy / export md / export pdf
@@ -190,8 +190,14 @@ See [Releases](https://github.com/bburge14/SOP/releases) for changelogs
 and downloads. `scripts/install.sh` / `scripts/update.sh` (self-hosted
 only) always track the `main` branch, not a specific release tag.
 
+## Privacy & data handling
+
+- **Only the topic string is ever sent to the AI provider.** `app/api/generate/route.ts` accepts `{ topic }` and nothing else — the values you type into the variable form (hostnames, IPs, credentials, anything site-specific) are substituted entirely client-side by `lib/sop/template.ts#renderTemplate` and never leave the browser/app unless you explicitly export/copy. `TopicInput.tsx` shows a standing reminder not to put proprietary, confidential, or personal information in the topic itself, since that string does go to a third party.
+- **Nothing generated is persisted by the app.** Audited: no database, no `localStorage`/`sessionStorage`/IndexedDB use for SOP content (the only `localStorage` key anywhere is the self-hosted updater's optional auth token — see "Self-hosted" below — unrelated to generated content), and the only `fs.write*` calls in `electron/` are the PDF export (writes to a path *you* pick via a native save dialog) and the provider/API-key config file (settings, not SOP content). Server-side error logging (`console.error` in `app/api/generate/route.ts`) logs the exception only, never the topic or the generated document. Generated content lives in React state for the current session only — refreshing the page loses it, same as any unsaved browser tab; the only ways anything survives are the export/copy actions you take yourself.
+
 ## Notable behavior
 
+- **Import** (upload icon next to Generate) loads a local `.md`/`.markdown`/`.txt` file straight into the same editing UI a generation produces — no AI call involved. The title is the file's first `# ` heading (falling back to the filename), and any `{{key}}` placeholders already in the file are auto-detected into editable fields via the same logic `handleTemplateChange` uses for hand-edited Source content. Lets you take a previously-exported (or hand-written) SOP and keep editing it.
 - **Add Custom Field** adds a form field immediately; paste `{{your_key}}` into the Source tab to wire it into the document. Conversely, typing a new `{{key}}` directly into Source auto-creates its form field — the two directions are kept in sync in `SopWorkspace.tsx#handleTemplateChange`.
 - **Export PDF**: on desktop, `electron/main.js`'s `export:pdf` IPC handler calls `webContents.printToPDF()` directly and writes the buffer to a file the user picks via a native save dialog — a real, text-searchable PDF, not a screenshot. Self-hosted (no `window.electronAPI`) falls back to the browser's native print dialog. Both render against the same `#print-target`-scoped print stylesheet in `app/globals.css`, which explicitly overrides the app's dark theme to a light/print-appropriate palette — reproduced live before this existed: without those overrides, the exported "document" was the dark UI verbatim (white text on black), which is exactly why it read as a screen grab rather than a document. Verified via `printToPDF` + `pdftoppm`/`pdftotext`: real vector text, not a rasterized image, and correctly light-themed regardless of the app's dark UI.
 - **Regenerate** discards current field values/edits after a confirm prompt, then re-runs the same topic through the pipeline.
