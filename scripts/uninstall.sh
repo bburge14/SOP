@@ -43,10 +43,14 @@ if [[ "$PURGE" -eq 1 || "$REMOVE_ALL" -eq 1 ]]; then
 fi
 
 if [[ "$REMOVE_ALL" -eq 1 ]]; then
-  if [[ -r /dev/tty ]]; then
+  # `[[ -r /dev/tty ]]` can be a false positive in a non-interactive/
+  # sandboxed shell (device node exists but opening it fails with ENXIO) —
+  # actually try to open it, and default CONFIRM so a failed/skipped
+  # prompt safely aborts instead of an unbound-variable crash under
+  # `set -u`. Both failure modes reproduced during testing.
+  CONFIRM=""
+  if ( exec 3<>/dev/tty ) 2>/dev/null; then
     read -rp "This permanently deletes $REPO_DIR (including .env.local). Type the full path to confirm: " CONFIRM </dev/tty || true
-  else
-    CONFIRM=""
   fi
   if [[ "$CONFIRM" == "$REPO_DIR" ]]; then
     rm -rf "$REPO_DIR"

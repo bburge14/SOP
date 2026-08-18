@@ -71,7 +71,19 @@ npm install --include=dev
 
 if [[ ! -f .env.local ]]; then
   cp .env.example .env.local
-  if [[ -r /dev/tty ]]; then
+  # `[[ -r /dev/tty ]]` can be a false positive in a non-interactive/
+  # sandboxed shell (the device node exists but opening it fails with
+  # ENXIO) — actually try to open it instead of just checking permissions.
+  # Done in a subshell so `2>/dev/null` reliably catches the failure
+  # message (redirections apply left-to-right, so an unwrapped `exec
+  # 3<>/dev/tty 2>/dev/null` fails before its own 2>/dev/null takes
+  # effect) and so the fd change doesn't leak into this shell either way.
+  HAVE_TTY=0
+  if ( exec 3<>/dev/tty ) 2>/dev/null; then
+    HAVE_TTY=1
+  fi
+
+  if [[ "$HAVE_TTY" -eq 1 ]]; then
     log "Configuring an LLM provider (edit .env.local later to change this)."
     read -rp "Provider [anthropic/openai/gemini/ollama] (default anthropic): " PROVIDER </dev/tty || true
     PROVIDER="${PROVIDER:-anthropic}"
