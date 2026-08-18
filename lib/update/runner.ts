@@ -146,7 +146,7 @@ export async function performUpdate(): Promise<UpdateResult> {
     log.push("\n$ git pull --ff-only");
     log.push(await pullFastForward());
 
-    log.push("\n$ npm install");
+    log.push("\n$ npm install --include=dev");
     log.push(await npmInstall());
 
     log.push("\n$ npm run build");
