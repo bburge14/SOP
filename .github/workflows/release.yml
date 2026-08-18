@@ -1,0 +1,52 @@
+name: Release desktop app
+
+# Builds the Windows/Mac/Linux installers via electron-builder and
+# publishes them (plus the auto-update metadata electron-updater needs)
+# to the GitHub Release for the pushed tag. Windows and Mac can't be
+# reliably cross-built from Linux, hence the OS matrix — each runner
+# builds its own native target.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: --linux
+          - os: windows-latest
+            args: --win
+          - os: macos-latest
+            args: --mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run prepare:standalone
+
+      - name: Build and publish
+        run: npx electron-builder --publish always ${{ matrix.args }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No paid Apple Developer certificate — build an unsigned .dmg
+          # rather than have electron-builder search for (and fail to
+          # find) a signing identity. Unsigned means Gatekeeper shows an
+          # "unidentified developer" warning on first launch; documented
+          # in the README.
+          CSC_IDENTITY_AUTO_DISCOVERY: false

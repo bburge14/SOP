@@ -7,6 +7,8 @@ import VariableForm from "@/components/VariableForm";
 import MarkdownPreview, { type PreviewMode } from "@/components/MarkdownPreview";
 import ActionBar from "@/components/ActionBar";
 import UpdatePanel from "@/components/UpdatePanel";
+import DesktopUpdatePanel from "@/components/DesktopUpdatePanel";
+import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import type { SopVariable, VariableValues } from "@/types/sop";
 
@@ -170,6 +172,8 @@ export default function SopWorkspace() {
           <p className="text-xs text-slate-500 mt-0.5">Generate parameterized standard operating procedures</p>
         </div>
         <UpdatePanel />
+        <DesktopUpdatePanel />
+        <DesktopSettingsPanel />
       </header>
 
       <TopicInput onSubmit={(t) => void generate(t)} loading={loading} initialValue={topic} />

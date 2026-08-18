@@ -1,7 +1,11 @@
 {
   "name": "sop-writer",
-  "version": "0.1.0",
+  "productName": "SOP Writer",
+  "version": "0.2.0",
+  "description": "Generate parameterized Standard Operating Procedures with an LLM.",
+  "author": "bburge14 <bradey.burge@gmail.com>",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,15 +15,22 @@
     "typecheck": "tsc --noEmit",
     "app:install": "bash scripts/install.sh",
     "app:update": "bash scripts/update.sh",
-    "app:uninstall": "bash scripts/uninstall.sh"
+    "app:uninstall": "bash scripts/uninstall.sh",
+    "prepare:standalone": "node scripts/prepare-standalone.mjs",
+    "electron:start": "npm run build && npm run prepare:standalone && electron .",
+    "dist": "npm run build && npm run prepare:standalone && electron-builder --publish never",
+    "dist:linux": "npm run dist -- --linux",
+    "dist:win": "npm run dist -- --win",
+    "dist:mac": "npm run dist -- --mac"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
+    "lucide-react": "^0.446.0",
     "next": "^16.3.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.0",
-    "lucide-react": "^0.446.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -27,8 +38,75 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.5.4"
+  },
+  "build": {
+    "appId": "com.bburge14.sopwriter",
+    "productName": "SOP Writer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/next/**/*",
+      "!node_modules/@next/**/*",
+      "!node_modules/react/**/*",
+      "!node_modules/react-dom/**/*",
+      "!node_modules/react-markdown/**/*",
+      "!node_modules/remark-gfm/**/*",
+      "!node_modules/lucide-react/**/*",
+      "!node_modules/sharp/**/*",
+      "!node_modules/@img/**/*",
+      "!node_modules/styled-jsx/**/*",
+      "!node_modules/scheduler/**/*",
+      "!node_modules/client-only/**/*",
+      "!node_modules/@swc/**/*",
+      "!node_modules/tailwindcss/**/*",
+      "!node_modules/postcss/**/*",
+      "!node_modules/autoprefixer/**/*",
+      "!node_modules/typescript/**/*",
+      "!node_modules/electron/**/*",
+      "!node_modules/electron-builder/**/*",
+      "!node_modules/.bin/**/*",
+      "!app/**",
+      "!components/**",
+      "!lib/**",
+      "!types/**",
+      "!scripts/**",
+      "!.next/**",
+      "!*.md",
+      "!.env*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/pkg-src",
+        "to": ".",
+        "filter": ["**/*", "app-server/node_modules/**/*"]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bburge14",
+        "repo": "SOP"
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity"
+    }
   }
 }

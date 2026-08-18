@@ -8,6 +8,9 @@
 # production
 /build
 
+# electron-builder output (npm run dist*)
+/release
+
 # env
 .env
 .env.local
