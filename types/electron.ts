@@ -1,4 +1,4 @@
-export type DesktopProvider = "anthropic" | "openai" | "gemini" | "ollama";
+export type DesktopProvider = "openai" | "gemini" | "ollama";
 
 export interface DesktopSettings {
   provider: DesktopProvider;

@@ -19,4 +19,4 @@ export interface SopDocument {
 
 export type VariableValues = Record<string, string | number | boolean>;
 
-export type LlmProvider = "anthropic" | "openai" | "gemini" | "ollama";
+export type LlmProvider = "openai" | "gemini" | "ollama";

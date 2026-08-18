@@ -5,7 +5,6 @@ import { AlertTriangle, Loader2, Settings2 } from "lucide-react";
 import type { DesktopProvider, DesktopSettings } from "@/types/electron";
 
 const PROVIDER_NEEDS_KEY: Record<DesktopProvider, boolean> = {
-  anthropic: true,
   openai: true,
   gemini: true,
   ollama: false,
@@ -18,7 +17,7 @@ interface DesktopSettingsPanelProps {
 export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPanelProps) {
   const [settings, setSettings] = useState<DesktopSettings | null>(null);
   const [open, setOpen] = useState(false);
-  const [provider, setProvider] = useState<DesktopProvider>("anthropic");
+  const [provider, setProvider] = useState<DesktopProvider>("gemini");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,9 +96,8 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
               onChange={(e) => setProvider(e.target.value as DesktopProvider)}
               className="w-full bg-canvas border border-border rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
             >
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="openai">OpenAI</option>
               <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
               <option value="ollama">Ollama (local)</option>
             </select>
           </div>

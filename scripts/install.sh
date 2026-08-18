@@ -85,17 +85,16 @@ if [[ ! -f .env.local ]]; then
 
   if [[ "$HAVE_TTY" -eq 1 ]]; then
     log "Configuring an LLM provider (edit .env.local later to change this)."
-    read -rp "Provider [anthropic/openai/gemini/ollama] (default anthropic): " PROVIDER </dev/tty || true
-    PROVIDER="${PROVIDER:-anthropic}"
+    read -rp "Provider [gemini/openai/ollama] (default gemini): " PROVIDER </dev/tty || true
+    PROVIDER="${PROVIDER:-gemini}"
     sed -i "s|^LLM_PROVIDER=.*|LLM_PROVIDER=${PROVIDER}|" .env.local
 
     VAR=""
     case "$PROVIDER" in
-      anthropic) VAR=ANTHROPIC_API_KEY ;;
       openai) VAR=OPENAI_API_KEY ;;
       gemini) VAR=GEMINI_API_KEY ;;
       ollama) VAR="" ;;
-      *) warn "Unrecognized provider \"$PROVIDER\", leaving LLM_PROVIDER as anthropic in .env.local." ;;
+      *) warn "Unrecognized provider \"$PROVIDER\", leaving LLM_PROVIDER as gemini in .env.local." ;;
     esac
     if [[ -n "$VAR" ]]; then
       read -rsp "$VAR (input hidden): " KEY </dev/tty || true

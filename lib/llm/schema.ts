@@ -4,8 +4,8 @@ import { z } from "zod";
  * Single source of truth for the shape of a generated SOP.
  * `sopZodSchema` validates parsed JSON at runtime; `sopJsonSchema` is the
  * plain JSON Schema fed to providers that support structured output
- * (Anthropic tool input_schema, OpenAI function parameters, Gemini
- * responseSchema). Keep the two in sync when the shape changes.
+ * (OpenAI function parameters, Gemini responseSchema). Keep the two in
+ * sync when the shape changes.
  */
 export const sopZodSchema = z.object({
   title: z.string().min(1),
@@ -54,8 +54,8 @@ export const sopJsonSchema = {
           // Modeled as a plain string (not a union) because Gemini's
           // responseSchema doesn't support multi-type fields. Callers coerce
           // using the sibling `type` field; zod still accepts a native
-          // number/boolean too, since Anthropic/OpenAI don't enforce this
-          // strictly and may return one.
+          // number/boolean too, since OpenAI doesn't enforce this strictly
+          // and may return one.
           default: {
             type: "string",
             description: "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\")",

@@ -11,13 +11,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const safeStorageBridge = require("./safeStorageBridge");
 
-const DEFAULTS = { provider: "anthropic", model: "", encryptedApiKey: null };
+const DEFAULTS = { provider: "gemini", model: "", encryptedApiKey: null };
 
 // Ollama runs locally with no credential.
-const PROVIDER_NEEDS_KEY = { anthropic: true, openai: true, gemini: true, ollama: false };
-const KEY_ENV_VAR = { anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", gemini: "GEMINI_API_KEY" };
+const PROVIDER_NEEDS_KEY = { openai: true, gemini: true, ollama: false };
+const KEY_ENV_VAR = { openai: "OPENAI_API_KEY", gemini: "GEMINI_API_KEY" };
 const MODEL_ENV_VAR = {
-  anthropic: "ANTHROPIC_MODEL",
   openai: "OPENAI_MODEL",
   gemini: "GEMINI_MODEL",
   ollama: "OLLAMA_MODEL",

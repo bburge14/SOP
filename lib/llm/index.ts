@@ -1,11 +1,10 @@
-import { AnthropicAdapter } from "@/lib/llm/anthropic";
 import { OpenAiAdapter } from "@/lib/llm/openai";
 import { GeminiAdapter } from "@/lib/llm/gemini";
 import { OllamaAdapter } from "@/lib/llm/ollama";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
 import type { LlmProvider } from "@/types/sop";
 
-const PROVIDERS: LlmProvider[] = ["anthropic", "openai", "gemini", "ollama"];
+const PROVIDERS: LlmProvider[] = ["openai", "gemini", "ollama"];
 
 /**
  * Reads LLM_PROVIDER at request time (not module load time) so a single
@@ -14,7 +13,7 @@ const PROVIDERS: LlmProvider[] = ["anthropic", "openai", "gemini", "ollama"];
  * `getLlmAdapter().generate(system, user)`.
  */
 export function getLlmAdapter(): LlmAdapter {
-  const provider = (process.env.LLM_PROVIDER || "anthropic").toLowerCase() as LlmProvider;
+  const provider = (process.env.LLM_PROVIDER || "gemini").toLowerCase() as LlmProvider;
 
   if (!PROVIDERS.includes(provider)) {
     throw new LlmAdapterError(
@@ -24,8 +23,6 @@ export function getLlmAdapter(): LlmAdapter {
   }
 
   switch (provider) {
-    case "anthropic":
-      return new AnthropicAdapter();
     case "openai":
       return new OpenAiAdapter();
     case "gemini":

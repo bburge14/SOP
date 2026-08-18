@@ -42,7 +42,6 @@ lib/
     types.ts               # LlmAdapter interface, LlmAdapterError
     schema.ts               # single source of truth: zod schema + JSON Schema
     prompt.ts               # system/user prompt builders
-    anthropic.ts            # Claude — tool-use, tool_choice forced
     openai.ts                # GPT — function-calling, tool_choice forced
     gemini.ts                # Gemini — responseSchema + responseMimeType:json
     ollama.ts                 # local models — format:"json" + schema-in-prompt
@@ -67,11 +66,10 @@ types/sop.ts                 # SopDocument, SopVariable, VariableValues, LlmProv
 
 ### Why an adapter interface instead of one SDK
 
-`LlmAdapter` is one method: `generate(systemPrompt, userPrompt) -> Promise<string>`. Each provider adapter builds its own request with **raw `fetch`** (no `@anthropic-ai/sdk` / `openai` / `@google/generative-ai` packages) and returns the raw JSON text it got back, unvalidated. Parsing and schema validation happen once, centrally, in `app/api/generate/route.ts` — so swapping providers via `LLM_PROVIDER` never touches API-route or frontend code, and the dependency tree stays lean (no LLM SDKs at all).
+`LlmAdapter` is one method: `generate(systemPrompt, userPrompt) -> Promise<string>`. Each provider adapter builds its own request with **raw `fetch`** (no `openai` / `@google/generative-ai` packages) and returns the raw JSON text it got back, unvalidated. Parsing and schema validation happen once, centrally, in `app/api/generate/route.ts` — so swapping providers via `LLM_PROVIDER` never touches API-route or frontend code, and the dependency tree stays lean (no LLM SDKs at all).
 
 Each adapter still gets the most reliable structured-output mechanism its provider offers:
-- **Anthropic** — tool-use with `tool_choice` pinned to a single tool, so the only valid model output is well-formed `tool_use.input`.
-- **OpenAI** — function-calling with `tool_choice` pinned the same way.
+- **OpenAI** — function-calling with `tool_choice` pinned to a single tool, so the only valid model output is well-formed arguments.
 - **Gemini** — `generationConfig.responseSchema` + `responseMimeType: "application/json"`.
 - **Ollama** — `format: "json"` plus the JSON Schema spelled out in the prompt itself, since local-model schema adherence varies. This is the adapter that leans hardest on `lib/sop/parseJson.ts`'s cleanup passes (strip code fences, slice a balanced `{...}` object out of surrounding prose, drop trailing commas) and `lib/sop/reconcile.ts`'s auto-repair (any `{{key}}` used in the markdown but missing from `variables[]` gets synthesized; any declared variable never referenced gets dropped).
 
@@ -161,8 +159,7 @@ bash scripts/uninstall.sh --remove-all # also delete the whole install directory
 
 | Variable | Required when | Notes |
 |---|---|---|
-| `LLM_PROVIDER` | always | `anthropic` \| `openai` \| `gemini` \| `ollama` — default `anthropic` |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | `LLM_PROVIDER=anthropic` | model defaults to `claude-sonnet-4-5` |
+| `LLM_PROVIDER` | always | `openai` \| `gemini` \| `ollama` — default `gemini` |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | `LLM_PROVIDER=openai` | model defaults to `gpt-4o` |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | `LLM_PROVIDER=gemini` | model defaults to `gemini-2.0-flash` |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `LLM_PROVIDER=ollama` | no API key; point at a running `ollama serve`, defaults to `http://localhost:11434` / `llama3.1` |
