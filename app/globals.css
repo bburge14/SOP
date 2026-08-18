@@ -91,6 +91,19 @@ body {
     width: 100%;
     background: #ffffff;
     padding: 0;
+    /* The live element is a fixed-height scroll container
+       (h-full overflow-y-auto in MarkdownPreview.tsx) — without
+       cancelling that here, printing/printToPDF captured only the
+       visible scrolled viewport as a small cropped box (with the
+       scrollbar rendered as static graphics) instead of letting the
+       full content flow and paginate. Reproduced live with a real
+       multi-step SOP: page 1 showed a shrunk, scrollbar-bearing box
+       and page 2 came out completely blank — my earlier fix was only
+       ever exercised with a short sample that never needed to scroll,
+       so this never showed up in that test. */
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   #print-target .sop-prose {
     color: #1e293b;
