@@ -40,6 +40,7 @@ export default function SopWorkspace() {
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
   // gate only applies to the desktop app, which has no .env.local a
   // terminal could set up, so first-run setup has to happen in the UI.
@@ -61,6 +62,7 @@ export default function SopWorkspace() {
   async function generate(newTopic: string) {
     setLoading(true);
     setError(null);
+    setErrorDetail(null);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -68,7 +70,14 @@ export default function SopWorkspace() {
         body: JSON.stringify({ topic: newTopic }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to generate SOP.");
+      if (!res.ok) {
+        // `error` is always a clean, human-readable message; `detail` (raw
+        // provider response / schema-validation issues) is opt-in via the
+        // "Show technical details" toggle below, never shown by default.
+        setError(data.error || "Failed to generate SOP.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
 
       const sop = data.sop as {
         title: string;
@@ -211,7 +220,19 @@ export default function SopWorkspace() {
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-lg px-4 py-3">
           <AlertTriangle className="size-4 mt-0.5 shrink-0" />
-          <span>{error}</span>
+          <div className="min-w-0">
+            <span>{error}</span>
+            {errorDetail && (
+              <details className="mt-1.5">
+                <summary className="text-xs text-red-400/70 hover:text-red-300 cursor-pointer select-none">
+                  Show technical details
+                </summary>
+                <pre className="mt-1 max-h-40 overflow-y-auto bg-black/30 border border-red-500/20 rounded p-2 text-[11px] font-mono text-red-300/80 whitespace-pre-wrap">
+                  {errorDetail}
+                </pre>
+              </details>
+            )}
+          </div>
         </div>
       )}
 

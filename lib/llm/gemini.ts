@@ -1,7 +1,8 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
-import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
+import { LlmAdapterError, LlmConfigError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/llm/modelOptions";
 import { fetchWithRetry } from "@/lib/llm/retry";
+import { humanizeProviderError } from "@/lib/llm/humanizeError";
 
 /**
  * Gemini takes the JSON Schema directly via generationConfig.responseSchema
@@ -15,7 +16,7 @@ export class GeminiAdapter implements LlmAdapter {
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new LlmAdapterError("gemini", "GEMINI_API_KEY is not set");
+    if (!apiKey) throw new LlmConfigError("gemini", "No Gemini API key is configured — add one in Settings (or set GEMINI_API_KEY).");
     this.apiKey = apiKey;
     this.model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   }
@@ -38,7 +39,7 @@ export class GeminiAdapter implements LlmAdapter {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new LlmAdapterError("gemini", `API request failed (${res.status}): ${body}`);
+      throw new LlmAdapterError("gemini", humanizeProviderError("gemini", res.status, body), body);
     }
 
     const data = await res.json();

@@ -4,7 +4,7 @@ import { getLlmAdapter } from "@/lib/llm";
 import { SOP_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/llm/prompt";
 import { extractAndParseJson } from "@/lib/sop/parseJson";
 import { validateAndReconcile } from "@/lib/sop/reconcile";
-import { LlmAdapterError } from "@/lib/llm/types";
+import { LlmAdapterError, LlmConfigError } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,21 +34,38 @@ export async function POST(req: NextRequest) {
     const sop = validateAndReconcile(parsed);
     return NextResponse.json({ sop });
   } catch (err) {
-    return NextResponse.json({ error: describeError(err) }, { status: statusFor(err) });
+    // Full technical detail goes to the server log — never lost, just not
+    // dumped raw into the error banner (reported live: a Gemini 503 body
+    // rendered verbatim in the UI). The client gets a clean message plus
+    // an optional `detail` string for an opt-in "show technical details."
+    console.error("[api/generate]", err);
+    const { message, detail } = describeError(err);
+    return NextResponse.json({ error: message, detail }, { status: statusFor(err) });
   }
 }
 
 function statusFor(err: unknown): number {
-  if (err instanceof LlmAdapterError && err.message.includes("is not set")) return 500;
+  // Not configured (500, fix it in Settings) is distinct from the
+  // provider's own request failing (502, possibly transient) — checked by
+  // type, not by matching message text, which silently broke once already
+  // when the wording changed but a string check on it didn't.
+  if (err instanceof LlmConfigError) return 500;
   return 502;
 }
 
-function describeError(err: unknown): string {
+function describeError(err: unknown): { message: string; detail?: string } {
   if (err instanceof ZodError) {
     const issues = err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
-    return `Model response didn't match the expected SOP schema: ${issues}`;
+    return {
+      message: "The AI's response wasn't formatted correctly. This is usually temporary — try regenerating.",
+      detail: issues,
+    };
   }
-  if (err instanceof LlmAdapterError) return err.message;
-  if (err instanceof Error) return err.message;
-  return "Unknown error generating SOP.";
+  if (err instanceof LlmAdapterError) {
+    return { message: err.message, detail: typeof err.cause === "string" ? err.cause : undefined };
+  }
+  if (err instanceof Error) {
+    return { message: err.message };
+  }
+  return { message: "Unknown error generating SOP." };
 }

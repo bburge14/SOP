@@ -47,6 +47,7 @@ lib/
     gemini.ts                # Gemini — responseSchema + responseMimeType:json
     ollama.ts                 # local models — format:"json" + schema-in-prompt
     retry.ts                   # shared fetchWithRetry() — backs off on 429/5xx, fails fast otherwise
+    humanizeError.ts            # raw provider error body -> one clean, actionable sentence
     index.ts                 # getLlmAdapter() factory, reads LLM_PROVIDER
   sop/
     parseJson.ts             # tolerant JSON extraction (fences, prose, trailing commas)
@@ -81,6 +82,8 @@ Each adapter still gets the most reliable structured-output mechanism its provid
 - **Ollama** — `format: "json"` plus the JSON Schema spelled out in the prompt itself, since local-model schema adherence varies. This is the adapter that leans hardest on `lib/sop/parseJson.ts`'s cleanup passes (strip code fences, slice a balanced `{...}` object out of surrounding prose, drop trailing commas) and `lib/sop/reconcile.ts`'s auto-repair (any `{{key}}` used in the markdown but missing from `variables[]` gets synthesized; any declared variable never referenced gets dropped).
 
 All three route their request through `lib/llm/retry.ts#fetchWithRetry` — transient provider errors (429, 500/502/503/504, or a network failure) get up to 3 attempts with exponential backoff (honoring `Retry-After` if the provider sends one) before surfacing to the user; a 4xx like a bad key or bad request fails immediately since retrying it can't help. Reproduced live: Gemini returning "currently experiencing high demand" (503) on an otherwise-working setup — that's now retried transparently instead of requiring a manual re-click.
+
+If a request still fails after retries, `lib/llm/humanizeError.ts` turns the status code + raw provider response into one clean, actionable sentence ("Gemini is temporarily unavailable — try again shortly" / "OpenAI rejected the API key. Check it in Settings." / etc.) instead of surfacing the provider's raw JSON error body. The raw body is preserved as the error's `cause`, logged server-side (`console.error` in `app/api/generate/route.ts`), and sent to the client as a separate `detail` field the error banner shows behind a collapsed "Show technical details" toggle — never dumped in the main message by default, but not lost either.
 
 ### Live preview without re-calling the API
 

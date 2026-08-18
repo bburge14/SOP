@@ -19,3 +19,17 @@ export class LlmAdapterError extends Error {
     this.name = "LlmAdapterError";
   }
 }
+
+/**
+ * Thrown specifically for "no API key/config set up" — distinct from
+ * LlmAdapterError so the API route can tell "not configured yet" (500,
+ * fix the setup) apart from "the provider's request failed" (502, maybe
+ * transient) without string-matching the message text, which broke once
+ * before when the wording changed but the check didn't.
+ */
+export class LlmConfigError extends LlmAdapterError {
+  constructor(provider: string, message: string) {
+    super(provider, message);
+    this.name = "LlmConfigError";
+  }
+}

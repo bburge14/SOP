@@ -1,7 +1,8 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
-import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
+import { LlmAdapterError, LlmConfigError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
 import { fetchWithRetry } from "@/lib/llm/retry";
+import { humanizeProviderError } from "@/lib/llm/humanizeError";
 
 const FUNCTION_NAME = "emit_sop";
 
@@ -17,7 +18,7 @@ export class OpenAiAdapter implements LlmAdapter {
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new LlmAdapterError("openai", "OPENAI_API_KEY is not set");
+    if (!apiKey) throw new LlmConfigError("openai", "No OpenAI API key is configured — add one in Settings (or set OPENAI_API_KEY).");
     this.apiKey = apiKey;
     this.model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
   }
@@ -51,7 +52,7 @@ export class OpenAiAdapter implements LlmAdapter {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new LlmAdapterError("openai", `API request failed (${res.status}): ${body}`);
+      throw new LlmAdapterError("openai", humanizeProviderError("openai", res.status, body), body);
     }
 
     const data = await res.json();

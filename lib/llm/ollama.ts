@@ -1,6 +1,7 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
 import { fetchWithRetry } from "@/lib/llm/retry";
+import { humanizeProviderError } from "@/lib/llm/humanizeError";
 
 /**
  * Local models via Ollama vary widely in how reliably they honor structured
@@ -50,7 +51,7 @@ export class OllamaAdapter implements LlmAdapter {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new LlmAdapterError("ollama", `API request failed (${res.status}): ${body}`);
+      throw new LlmAdapterError("ollama", humanizeProviderError("ollama", res.status, body), body);
     }
 
     const data = await res.json();
