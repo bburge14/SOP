@@ -1,6 +1,7 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/llm/modelOptions";
+import { fetchWithRetry } from "@/lib/llm/retry";
 
 /**
  * Gemini takes the JSON Schema directly via generationConfig.responseSchema
@@ -22,7 +23,7 @@ export class GeminiAdapter implements LlmAdapter {
   async generate(systemPrompt: string, userPrompt: string): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
 
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

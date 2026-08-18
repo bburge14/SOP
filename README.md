@@ -46,6 +46,7 @@ lib/
     openai.ts                # GPT — function-calling, tool_choice forced
     gemini.ts                # Gemini — responseSchema + responseMimeType:json
     ollama.ts                 # local models — format:"json" + schema-in-prompt
+    retry.ts                   # shared fetchWithRetry() — backs off on 429/5xx, fails fast otherwise
     index.ts                 # getLlmAdapter() factory, reads LLM_PROVIDER
   sop/
     parseJson.ts             # tolerant JSON extraction (fences, prose, trailing commas)
@@ -78,6 +79,8 @@ Each adapter still gets the most reliable structured-output mechanism its provid
 - **OpenAI** — function-calling with `tool_choice` pinned to a single tool, so the only valid model output is well-formed arguments.
 - **Gemini** — `generationConfig.responseSchema` + `responseMimeType: "application/json"`.
 - **Ollama** — `format: "json"` plus the JSON Schema spelled out in the prompt itself, since local-model schema adherence varies. This is the adapter that leans hardest on `lib/sop/parseJson.ts`'s cleanup passes (strip code fences, slice a balanced `{...}` object out of surrounding prose, drop trailing commas) and `lib/sop/reconcile.ts`'s auto-repair (any `{{key}}` used in the markdown but missing from `variables[]` gets synthesized; any declared variable never referenced gets dropped).
+
+All three route their request through `lib/llm/retry.ts#fetchWithRetry` — transient provider errors (429, 500/502/503/504, or a network failure) get up to 3 attempts with exponential backoff (honoring `Retry-After` if the provider sends one) before surfacing to the user; a 4xx like a bad key or bad request fails immediately since retrying it can't help. Reproduced live: Gemini returning "currently experiencing high demand" (503) on an otherwise-working setup — that's now retried transparently instead of requiring a manual re-click.
 
 ### Live preview without re-calling the API
 

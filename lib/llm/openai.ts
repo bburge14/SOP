@@ -1,6 +1,7 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
+import { fetchWithRetry } from "@/lib/llm/retry";
 
 const FUNCTION_NAME = "emit_sop";
 
@@ -22,7 +23,7 @@ export class OpenAiAdapter implements LlmAdapter {
   }
 
   async generate(systemPrompt: string, userPrompt: string): Promise<string> {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "content-type": "application/json",

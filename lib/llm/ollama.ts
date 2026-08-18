@@ -1,5 +1,6 @@
 import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
+import { fetchWithRetry } from "@/lib/llm/retry";
 
 /**
  * Local models via Ollama vary widely in how reliably they honor structured
@@ -26,7 +27,7 @@ export class OllamaAdapter implements LlmAdapter {
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}/api/chat`, {
+      res = await fetchWithRetry(`${this.baseUrl}/api/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
