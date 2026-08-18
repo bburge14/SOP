@@ -135,3 +135,5 @@ the `main` branch, not a specific release tag.
 - **Add Custom Field** adds a form field immediately; paste `{{your_key}}` into the Source tab to wire it into the document. Conversely, typing a new `{{key}}` directly into Source auto-creates its form field — the two directions are kept in sync in `SopWorkspace.tsx#handleTemplateChange`.
 - **Export PDF** uses the browser's native print dialog against a `#print-target`-scoped print stylesheet (`app/globals.css`) — no server-side rendering dependency.
 - **Regenerate** discards current field values/edits after a confirm prompt, then re-runs the same topic through the pipeline.
+
+<!-- last verified: install/update/uninstall lifecycle tested end-to-end -->
