@@ -48,8 +48,12 @@ if [[ "$NODE_MAJOR" -lt 18 ]]; then
 fi
 
 # Already inside a checkout of this repo? Install in place rather than
-# cloning into $INSTALL_DIR.
+# cloning into $INSTALL_DIR — and say so if --dir was also passed, since
+# it's silently ignored in this branch.
 if [[ -f package.json ]] && grep -q '"name": "sop-writer"' package.json 2>/dev/null && [[ -d .git ]]; then
+  if [[ "$INSTALL_DIR" != "$DEFAULT_DIR" && "$INSTALL_DIR" != "$(pwd)" ]]; then
+    warn "Running from an existing checkout — ignoring --dir $INSTALL_DIR and installing in place instead."
+  fi
   INSTALL_DIR="$(pwd)"
   log "Running from an existing checkout at $INSTALL_DIR"
 elif [[ -d "$INSTALL_DIR/.git" ]]; then

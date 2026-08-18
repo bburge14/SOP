@@ -13,14 +13,18 @@ import { spawn } from "node:child_process";
 const RESTART_EXIT_CODE = 75;
 const port = process.env.PORT || "3000";
 
+let currentChild = null;
+
 function start() {
   console.log(`[supervisor] starting: next start -p ${port}`);
   const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", port], {
     stdio: "inherit",
     env: { ...process.env, SOP_WRITER_SUPERVISED: "1" },
   });
+  currentChild = child;
 
   child.on("exit", (code, signal) => {
+    currentChild = null;
     if (code === RESTART_EXIT_CODE) {
       console.log("[supervisor] restart requested, relaunching…");
       start();
@@ -35,7 +39,16 @@ function start() {
   });
 }
 
-process.on("SIGINT", () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
+// Without this, killing the supervisor (e.g. a plain `kill <pid>`, not
+// SIGKILL) leaves `next start` running as an orphan holding the port —
+// reproduced this during testing. A parent SIGKILL still can't be caught
+// here, but that's an OS-level limit; systemd's cgroup-based stop (the
+// preferred restart path) doesn't have this gap at all.
+function shutdown(signal) {
+  currentChild?.kill(signal);
+  process.exit(0);
+}
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 start();
