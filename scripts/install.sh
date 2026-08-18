@@ -67,7 +67,7 @@ fi
 cd "$INSTALL_DIR"
 
 log "Installing dependencies"
-npm install
+npm install --include=dev
 
 if [[ ! -f .env.local ]]; then
   cp .env.example .env.local

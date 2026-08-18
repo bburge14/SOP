@@ -38,7 +38,7 @@ log "Updating ${LOCAL:0:7} -> ${REMOTE:0:7}"
 git pull --ff-only
 
 log "Installing dependencies"
-npm install
+npm install --include=dev
 
 log "Building"
 npm run build

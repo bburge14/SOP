@@ -51,7 +51,13 @@ export async function pullFastForward(): Promise<string> {
 }
 
 export async function npmInstall(): Promise<string> {
-  const { stdout, stderr } = await execFileAsync("npm", ["install"], {
+  // This runs inside the already-started `next start` process, which sets
+  // process.env.NODE_ENV = "production" in-process — inherited by this
+  // child unless overridden, which makes a plain `npm install` silently
+  // drop devDependencies (typescript, tailwind, etc.), breaking the
+  // `npm run build` step right after it. --include=dev forces them back
+  // regardless of NODE_ENV. Reproduced and confirmed during update testing.
+  const { stdout, stderr } = await execFileAsync("npm", ["install", "--include=dev"], {
     cwd: REPO_ROOT,
     maxBuffer: 1024 * 1024 * 20,
   });
