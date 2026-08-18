@@ -1,0 +1,325 @@
+// Converts the rendered SOP markdown into a real .docx — proper Word
+// headings/lists/tables/bold/code formatting, not just text dumped into a
+// single style. Runs entirely client-side (browser), matching how
+// Export .md and Export PDF already work: no server round-trip, nothing
+// leaves the machine that isn't already visible in the preview.
+//
+// Parses via the same remark/unified stack `react-markdown` uses for the
+// live preview (unified + remark-parse + remark-gfm), so heading levels,
+// GFM tables, and list structure match what's actually rendered on screen
+// — this is a separate AST walk, not a reimplementation of a markdown
+// parser.
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import {
+  Document,
+  Paragraph,
+  TextRun,
+  ImageRun,
+  ExternalHyperlink,
+  HeadingLevel,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  ShadingType,
+  BorderStyle,
+  Packer,
+  type IImageOptions,
+} from "docx";
+
+const HEADING_LEVELS = [
+  HeadingLevel.HEADING_1,
+  HeadingLevel.HEADING_2,
+  HeadingLevel.HEADING_3,
+  HeadingLevel.HEADING_4,
+  HeadingLevel.HEADING_5,
+  HeadingLevel.HEADING_6,
+] as const;
+
+const MAX_IMAGE_WIDTH_PX = 550; // fits inside a Letter page's content area with 1" margins
+
+const CODE_SHADING = { type: ShadingType.CLEAR, fill: "F1F5F9", color: "auto" } as const;
+
+interface LoadedImage {
+  type: "png" | "jpg" | "gif" | "bmp";
+  data: Uint8Array;
+  width: number;
+  height: number;
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function mimeToImageType(mime: string): LoadedImage["type"] | null {
+  if (mime.includes("png")) return "png";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("bmp")) return "bmp";
+  return null;
+}
+
+function getImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || 1, height: img.naturalHeight || 1 });
+    img.onerror = () => reject(new Error("could not decode image"));
+    img.src = src;
+  });
+}
+
+function scaleToMaxWidth(width: number, height: number): { width: number; height: number } {
+  if (width <= MAX_IMAGE_WIDTH_PX) return { width, height };
+  const ratio = MAX_IMAGE_WIDTH_PX / width;
+  return { width: MAX_IMAGE_WIDTH_PX, height: Math.round(height * ratio) };
+}
+
+/** Returns null (rather than throwing) on any failure — a broken image shouldn't fail the whole export. */
+async function loadImage(url: string): Promise<LoadedImage | null> {
+  try {
+    let data: Uint8Array;
+    let type: LoadedImage["type"] | null;
+
+    const dataUriMatch = /^data:([^;]+);base64,(.+)$/s.exec(url);
+    if (dataUriMatch) {
+      type = mimeToImageType(dataUriMatch[1]!);
+      data = base64ToUint8Array(dataUriMatch[2]!);
+    } else if (/^https?:\/\//.test(url)) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const contentType = res.headers.get("content-type") || "";
+      type = mimeToImageType(contentType) || mimeToImageType(url);
+      data = new Uint8Array(await res.arrayBuffer());
+    } else {
+      return null; // unsupported scheme (e.g. a relative path with nothing to resolve against)
+    }
+
+    if (!type) return null;
+
+    const natural = await getImageDimensions(url);
+    const { width, height } = scaleToMaxWidth(natural.width, natural.height);
+    return { type, data, width, height };
+  } catch {
+    return null;
+  }
+}
+
+// ---- mdast node shapes we handle (subset — deliberately not a full mdast typing dependency) ----
+interface MdNode {
+  type: string;
+  children?: MdNode[];
+  value?: string;
+  depth?: number;
+  ordered?: boolean;
+  url?: string;
+  alt?: string;
+  lang?: string;
+  align?: (string | null)[];
+}
+
+async function convertInline(nodes: MdNode[], marks: { bold?: boolean; italic?: boolean } = {}): Promise<
+  (TextRun | ImageRun | ExternalHyperlink)[]
+> {
+  const runs: (TextRun | ImageRun | ExternalHyperlink)[] = [];
+  for (const node of nodes) {
+    switch (node.type) {
+      case "text":
+        runs.push(new TextRun({ text: node.value || "", bold: marks.bold, italics: marks.italic }));
+        break;
+      case "strong":
+        runs.push(...(await convertInline(node.children || [], { ...marks, bold: true })));
+        break;
+      case "emphasis":
+        runs.push(...(await convertInline(node.children || [], { ...marks, italic: true })));
+        break;
+      case "inlineCode":
+        runs.push(
+          new TextRun({
+            text: node.value || "",
+            font: "Courier New",
+            shading: CODE_SHADING,
+          })
+        );
+        break;
+      case "break":
+        runs.push(new TextRun({ text: "", break: 1 }));
+        break;
+      case "link": {
+        const children = await convertInline(node.children || [], marks);
+        const textRuns = children.filter((c): c is TextRun => c instanceof TextRun);
+        runs.push(
+          new ExternalHyperlink({
+            link: node.url || "#",
+            children: textRuns.length ? textRuns : [new TextRun({ text: node.url || "" })],
+          })
+        );
+        break;
+      }
+      case "image": {
+        const loaded = node.url ? await loadImage(node.url) : null;
+        if (loaded) {
+          const imageOptions = {
+            type: loaded.type,
+            data: loaded.data,
+            transformation: { width: loaded.width, height: loaded.height },
+          } as IImageOptions;
+          runs.push(new ImageRun(imageOptions));
+        } else if (node.alt) {
+          // Broken/unsupported image — degrade to its alt text rather than
+          // silently dropping content or failing the whole export.
+          runs.push(new TextRun({ text: `[image: ${node.alt}]`, italics: true }));
+        }
+        break;
+      }
+      default:
+        if (node.children) runs.push(...(await convertInline(node.children, marks)));
+    }
+  }
+  return runs;
+}
+
+async function convertListItems(items: MdNode[], ordered: boolean, level: number): Promise<Paragraph[]> {
+  const paragraphs: Paragraph[] = [];
+  for (const item of items) {
+    for (const child of item.children || []) {
+      if (child.type === "list") {
+        paragraphs.push(...(await convertListItems(child.children || [], Boolean(child.ordered), level + 1)));
+        continue;
+      }
+      const runs = await convertInline(child.children || [child]);
+      paragraphs.push(
+        new Paragraph({
+          children: runs,
+          bullet: ordered ? undefined : { level },
+          numbering: ordered ? { reference: "sop-numbering", level } : undefined,
+        })
+      );
+    }
+  }
+  return paragraphs;
+}
+
+async function convertTable(node: MdNode): Promise<Table> {
+  const rows = node.children || [];
+  const tableRows = await Promise.all(
+    rows.map(async (row, rowIndex) => {
+      const cells = row.children || [];
+      const tableCells = await Promise.all(
+        cells.map(async (cell) => {
+          const runs = await convertInline(cell.children || []);
+          return new TableCell({
+            width: { size: Math.floor(100 / (cells.length || 1)), type: WidthType.PERCENTAGE },
+            shading: rowIndex === 0 ? { type: ShadingType.CLEAR, fill: "E2E8F0", color: "auto" } : undefined,
+            children: [new Paragraph({ children: runs })],
+          });
+        })
+      );
+      return new TableRow({ children: tableCells });
+    })
+  );
+  return new Table({
+    rows: tableRows,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+    },
+  });
+}
+
+async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
+  switch (node.type) {
+    case "heading": {
+      const level = Math.min(Math.max(node.depth || 1, 1), 6) - 1;
+      return [new Paragraph({ heading: HEADING_LEVELS[level], children: await convertInline(node.children || []) })];
+    }
+    case "paragraph":
+      return [new Paragraph({ children: await convertInline(node.children || []) })];
+    case "list":
+      return convertListItems(node.children || [], Boolean(node.ordered), 0);
+    case "code": {
+      const lines = (node.value || "").split("\n");
+      return lines.map(
+        (line) =>
+          new Paragraph({
+            children: [new TextRun({ text: line || " ", font: "Courier New", shading: CODE_SHADING })],
+          })
+      );
+    }
+    case "blockquote": {
+      // Build these directly from inline runs rather than converting the
+      // children generically and re-wrapping — Paragraph doesn't expose
+      // its children back out, so there's no supported way to "add
+      // styling" to an already-built Paragraph after the fact.
+      const paragraphs: Paragraph[] = [];
+      for (const child of node.children || []) {
+        if (child.type === "paragraph") {
+          paragraphs.push(
+            new Paragraph({
+              children: await convertInline(child.children || []),
+              indent: { left: 720 },
+              border: { left: { style: BorderStyle.SINGLE, size: 12, color: "94A3B8", space: 8 } },
+            })
+          );
+        } else {
+          const nested = await convertBlock(child);
+          paragraphs.push(...nested.filter((n): n is Paragraph => n instanceof Paragraph));
+        }
+      }
+      return paragraphs;
+    }
+    case "thematicBreak":
+      return [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } } })];
+    case "table":
+      return [await convertTable(node)];
+    default:
+      if (node.children) {
+        const nested = await Promise.all(node.children.map(convertBlock));
+        return nested.flat();
+      }
+      return [];
+  }
+}
+
+/** Builds the .docx and returns it as a Blob ready for `URL.createObjectURL`. */
+export async function markdownToDocxBlob(title: string, markdown: string): Promise<Blob> {
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown) as unknown as MdNode;
+  const blocks = await Promise.all((tree.children || []).map(convertBlock));
+
+  const doc = new Document({
+    title,
+    numbering: {
+      config: [
+        {
+          reference: "sop-numbering",
+          levels: [
+            { level: 0, format: "decimal", text: "%1.", alignment: "start" },
+            { level: 1, format: "lowerLetter", text: "%2.", alignment: "start" },
+          ],
+        },
+      ],
+    },
+    sections: [
+      {
+        properties: {},
+        // No separate visible title paragraph here — the rendered markdown
+        // already carries its own heading structure (matching what the
+        // preview/PDF show), and generated SOPs consistently open with
+        // their own H1. Adding one unconditionally produced a duplicate
+        // title, caught by inspecting a real exported .docx's XML.
+        children: blocks.flat(),
+      },
+    ],
+  });
+
+  return Packer.toBlob(doc);
+}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, Download, Printer, RefreshCw } from "lucide-react";
+import { ChangeEvent, useRef, useState } from "react";
+import { Check, Copy, Download, FileType2, ImagePlus, Loader2, Printer, RefreshCw } from "lucide-react";
 import AddFieldDialog from "@/components/AddFieldDialog";
 import type { SopVariable } from "@/types/sop";
 
@@ -12,6 +12,9 @@ interface ActionBarProps {
   onCopy: () => void;
   onExportMarkdown: () => void;
   onExportPdf: () => void;
+  onExportDocx: () => void;
+  exportingDocx: boolean;
+  onInsertImage: (file: File) => void;
   existingKeys: Set<string>;
   onAddField: (variable: SopVariable) => void;
 }
@@ -23,15 +26,25 @@ export default function ActionBar({
   onCopy,
   onExportMarkdown,
   onExportPdf,
+  onExportDocx,
+  exportingDocx,
+  onInsertImage,
   existingKeys,
   onAddField,
 }: ActionBarProps) {
   const [copied, setCopied] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   function handleCopy() {
     onCopy();
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onInsertImage(file);
+    e.target.value = "";
   }
 
   return (
@@ -47,6 +60,24 @@ export default function ActionBar({
       </button>
 
       <AddFieldDialog existingKeys={existingKeys} onAdd={onAddField} />
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/bmp"
+        onChange={handleImageChange}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => imageInputRef.current?.click()}
+        disabled={disabled}
+        title="Insert an image into the document"
+        className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <ImagePlus className="size-3.5" />
+        Insert Image
+      </button>
 
       <div className="flex-1" />
 
@@ -67,6 +98,15 @@ export default function ActionBar({
       >
         <Download className="size-3.5" />
         Export .md
+      </button>
+      <button
+        type="button"
+        onClick={onExportDocx}
+        disabled={disabled || exportingDocx}
+        className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        {exportingDocx ? <Loader2 className="size-3.5 animate-spin" /> : <FileType2 className="size-3.5" />}
+        Export .docx
       </button>
       <button
         type="button"

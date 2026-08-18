@@ -11,6 +11,7 @@ import DesktopUpdatePanel from "@/components/DesktopUpdatePanel";
 import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
+import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import type { SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
@@ -40,6 +41,7 @@ export default function SopWorkspace() {
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
   // gate only applies to the desktop app, which has no .env.local a
@@ -257,6 +259,50 @@ export default function SopWorkspace() {
     window.print();
   }
 
+  async function handleExportDocx() {
+    setExportingDocx(true);
+    setError(null);
+    try {
+      const rendered = renderTemplate(template, values);
+      const blob = await markdownToDocxBlob(meta?.title || topic || "SOP", rendered);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slugify(meta?.title || topic || "sop")}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export DOCX.");
+    } finally {
+      setExportingDocx(false);
+    }
+  }
+
+  async function handleInsertImage(file: File) {
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError("That image is too large — 5MB max.");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Could not read that image."));
+        reader.readAsDataURL(file);
+      });
+      // Appended rather than inserted at cursor — same "add then reposition
+      // by hand in Source" pattern AddFieldDialog already uses for custom
+      // fields, so there's one mental model instead of two.
+      setTemplate((prev) => `${prev.trimEnd()}\n\n![${file.name}](${dataUrl})\n`);
+      setPreviewMode("source");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not insert that image.");
+    }
+  }
+
   if (electronGate === "checking") {
     return (
       <main className="h-screen flex items-center justify-center">
@@ -362,6 +408,9 @@ export default function SopWorkspace() {
               onCopy={handleCopy}
               onExportMarkdown={handleExportMarkdown}
               onExportPdf={handleExportPdf}
+              onExportDocx={() => void handleExportDocx()}
+              exportingDocx={exportingDocx}
+              onInsertImage={(f) => void handleInsertImage(f)}
               existingKeys={new Set(variables.map((v) => v.key))}
               onAddField={handleAddField}
             />
