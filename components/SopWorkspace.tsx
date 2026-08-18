@@ -12,6 +12,7 @@ import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
+import { docxToMarkdown } from "@/lib/sop/docxToMarkdown";
 import type { SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
@@ -110,11 +111,15 @@ export default function SopWorkspace() {
       if (!confirmed) return;
     }
 
+    const isDocx =
+      /\.docx$/i.test(file.name) ||
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
     let text: string;
     try {
-      text = await file.text();
+      text = isDocx ? await docxToMarkdown(file) : await file.text();
     } catch {
-      setError("Could not read that file.");
+      setError(isDocx ? "Could not read that .docx file. Is it a valid Word document?" : "Could not read that file.");
       return;
     }
     if (!text.trim()) {
@@ -124,7 +129,7 @@ export default function SopWorkspace() {
 
     // Best-effort title: first Markdown H1 in the file, else the filename.
     const titleMatch = /^#\s+(.+)$/m.exec(text);
-    const derivedTitle = titleMatch?.[1]?.trim() || file.name.replace(/\.(md|markdown|txt)$/i, "");
+    const derivedTitle = titleMatch?.[1]?.trim() || file.name.replace(/\.(md|markdown|txt|docx)$/i, "");
 
     // Same auto-detection SopWorkspace already uses when you hand-edit the
     // Source tab (handleTemplateChange) — any {{key}} in the imported text

@@ -1,0 +1,93 @@
+// Converts an imported .docx back into the same Markdown dialect the app
+// renders/exports (remark + GFM) — the inverse of markdownToDocx.ts. Runs
+// entirely client-side: mammoth unzips the .docx and walks its XML into
+// HTML, turndown (+ GFM plugin for tables/strikethrough) turns that HTML
+// into Markdown. No server round-trip, consistent with every other
+// import/export path in the app.
+import mammoth from "mammoth";
+import TurndownService from "turndown";
+import { gfm } from "turndown-plugin-gfm";
+
+const turndownService = new TurndownService({
+  headingStyle: "atx",
+  bulletListMarker: "-",
+  codeBlockStyle: "fenced",
+});
+turndownService.use(gfm);
+// mammoth merges consecutive "SOP Code Block" paragraphs into one bare
+// <pre> (no <code> child — see the style map below), so turndown's built-in
+// fencedCodeBlock/indentedCodeBlock rules don't match it (both require
+// firstChild to be a CODE element and only read *that* child's text,
+// silently dropping every line after the first if one were forced in).
+// This rule handles the bare-<pre> shape directly.
+turndownService.addRule("sopCodeBlock", {
+  filter: (node) => node.nodeName === "PRE" && (!node.firstChild || node.firstChild.nodeName !== "CODE"),
+  replacement: (_content, node) => `\n\n\`\`\`\n${node.textContent}\n\`\`\`\n\n`,
+});
+// Overrides turndown-plugin-gfm's tableCell rule (added rules run in
+// last-added-wins order — see turndown's Rules.add). Mammoth wraps every
+// cell's content in a <p>, so the plugin's version leaves raw "\n\n" inside
+// each cell; a GFM table row must be exactly one line, so that produces a
+// pipe table that fails to parse as a table at all. This collapses cell
+// content to a single line and escapes literal "|" so it can't be mistaken
+// for a column separator.
+turndownService.addRule("sopTableCell", {
+  filter: ["th", "td"],
+  replacement: (content, node) => {
+    const cell = content.trim().replace(/\s+/g, " ").replace(/\|/g, "\\|");
+    const index = node.parentNode ? Array.prototype.indexOf.call(node.parentNode.childNodes, node) : 0;
+    return (index === 0 ? "| " : " ") + cell + " |";
+  },
+});
+
+// Mirrors the named styles markdownToDocx.ts writes for inline code, code
+// blocks, and blockquotes (see INLINE_CODE_STYLE_NAME etc. there) — mammoth
+// only recognizes formatting through named Word styles, not raw run
+// properties like a font/shading combo, so without this a document
+// exported by this app round-trips its code/quote formatting into plain
+// paragraphs. Documents from other tools won't carry these style names and
+// fall back to mammoth's defaults, same as before.
+const SOP_STYLE_MAP = [
+  "r[style-name='SOP Inline Code'] => code",
+  "p[style-name='SOP Code Block'] => pre:separator('\\n')",
+  "p[style-name='SOP Blockquote'] => blockquote:fresh",
+];
+
+/**
+ * Word tables have no reliable "this row is the header" signal unless the
+ * source explicitly used TH cells or a table style — mammoth emits plain TD
+ * for every cell, which makes turndown's GFM table rule refuse to convert
+ * the table (it falls back to raw, unrendered HTML in the output markdown).
+ * Treating row 0 as the header — consistent with how this app's own docx
+ * export always shades row 0 — is what lets the table degrade to a normal
+ * GFM pipe table instead of inert HTML soup.
+ */
+function promoteFirstRowToHeader(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("table").forEach((table) => {
+    const firstRow = table.rows[0];
+    if (!firstRow) return;
+    Array.from(firstRow.cells).forEach((cell) => {
+      if (cell.tagName !== "TD") return;
+      const th = doc.createElement("th");
+      th.innerHTML = cell.innerHTML;
+      cell.parentNode?.replaceChild(th, cell);
+    });
+  });
+  return doc.body.innerHTML;
+}
+
+/** Throws on a file that isn't a readable .docx (e.g. corrupt or not actually Word). */
+export async function docxToMarkdown(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const { value: html } = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      styleMap: SOP_STYLE_MAP,
+      // Embed images as data URIs, matching how Insert Image already stores
+      // them inline — no external file references to resolve later.
+      convertImage: mammoth.images.dataUri,
+    }
+  );
+  return turndownService.turndown(promoteFirstRowToHeader(html)).trim();
+}

@@ -42,6 +42,20 @@ const MAX_IMAGE_WIDTH_PX = 550; // fits inside a Letter page's content area with
 
 const CODE_SHADING = { type: ShadingType.CLEAR, fill: "F1F5F9", color: "auto" } as const;
 
+// Named Word styles (not just direct formatting) for inline code, code
+// blocks, and blockquotes. Word's direct formatting (a run's font/shading
+// with no named style) is invisible to a generic docx reader — there's no
+// semantic marker saying "this is code," just visual properties. Naming
+// these styles lets docxToMarkdown.ts's mammoth styleMap recognize them by
+// name and convert back to backtick/fence/`>` markdown instead of degrading
+// to plain paragraphs, which is what a round trip through Import needs.
+const INLINE_CODE_STYLE_ID = "SopInlineCode";
+const INLINE_CODE_STYLE_NAME = "SOP Inline Code";
+const CODE_BLOCK_STYLE_ID = "SopCodeBlock";
+const CODE_BLOCK_STYLE_NAME = "SOP Code Block";
+const BLOCKQUOTE_STYLE_ID = "SopBlockquote";
+const BLOCKQUOTE_STYLE_NAME = "SOP Blockquote";
+
 interface LoadedImage {
   type: "png" | "jpg" | "gif" | "bmp";
   data: Uint8Array;
@@ -141,6 +155,7 @@ async function convertInline(nodes: MdNode[], marks: { bold?: boolean; italic?: 
         runs.push(
           new TextRun({
             text: node.value || "",
+            style: INLINE_CODE_STYLE_ID,
             font: "Courier New",
             shading: CODE_SHADING,
           })
@@ -251,6 +266,7 @@ async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
       return lines.map(
         (line) =>
           new Paragraph({
+            style: CODE_BLOCK_STYLE_ID,
             children: [new TextRun({ text: line || " ", font: "Courier New", shading: CODE_SHADING })],
           })
       );
@@ -265,6 +281,7 @@ async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
         if (child.type === "paragraph") {
           paragraphs.push(
             new Paragraph({
+              style: BLOCKQUOTE_STYLE_ID,
               children: await convertInline(child.children || []),
               indent: { left: 720 },
               border: { left: { style: BorderStyle.SINGLE, size: 12, color: "94A3B8", space: 8 } },
@@ -297,6 +314,34 @@ export async function markdownToDocxBlob(title: string, markdown: string): Promi
 
   const doc = new Document({
     title,
+    styles: {
+      characterStyles: [
+        {
+          id: INLINE_CODE_STYLE_ID,
+          name: INLINE_CODE_STYLE_NAME,
+          basedOn: "Normal",
+          run: { font: "Courier New", shading: CODE_SHADING },
+        },
+      ],
+      paragraphStyles: [
+        {
+          id: CODE_BLOCK_STYLE_ID,
+          name: CODE_BLOCK_STYLE_NAME,
+          basedOn: "Normal",
+          run: { font: "Courier New" },
+          paragraph: { shading: CODE_SHADING },
+        },
+        {
+          id: BLOCKQUOTE_STYLE_ID,
+          name: BLOCKQUOTE_STYLE_NAME,
+          basedOn: "Normal",
+          paragraph: {
+            indent: { left: 720 },
+            border: { left: { style: BorderStyle.SINGLE, size: 12, color: "94A3B8", space: 8 } },
+          },
+        },
+      ],
+    },
     numbering: {
       config: [
         {

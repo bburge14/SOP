@@ -39,7 +39,7 @@ export default function TopicInput({ onSubmit, onImport, loading, initialValue =
         <input
           ref={fileInputRef}
           type="file"
-          accept=".md,.markdown,.txt,text/markdown,text/plain"
+          accept=".md,.markdown,.txt,.docx,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={handleFileChange}
           className="hidden"
         />
@@ -47,7 +47,7 @@ export default function TopicInput({ onSubmit, onImport, loading, initialValue =
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={loading}
-          title="Import an existing SOP (.md) to edit"
+          title="Import an existing SOP (.md or .docx) to edit"
           className="flex items-center gap-2 border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
         >
           <Upload className="size-4" />
