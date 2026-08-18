@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, FileText } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, FileText, Loader2 } from "lucide-react";
 import TopicInput from "@/components/TopicInput";
 import VariableForm from "@/components/VariableForm";
 import MarkdownPreview, { type PreviewMode } from "@/components/MarkdownPreview";
@@ -9,8 +9,11 @@ import ActionBar from "@/components/ActionBar";
 import UpdatePanel from "@/components/UpdatePanel";
 import DesktopUpdatePanel from "@/components/DesktopUpdatePanel";
 import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
+import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import type { SopVariable, VariableValues } from "@/types/sop";
+
+type ElectronGate = "checking" | "needs-setup" | "ready";
 
 interface SopMeta {
   title: string;
@@ -37,6 +40,21 @@ export default function SopWorkspace() {
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Self-hosted (no window.electronAPI) skips straight to "ready" — this
+  // gate only applies to the desktop app, which has no .env.local a
+  // terminal could set up, so first-run setup has to happen in the UI.
+  const [electronGate, setElectronGate] = useState<ElectronGate>("checking");
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) {
+      setElectronGate("ready");
+      return;
+    }
+    void api.getSettings().then((s) => {
+      setElectronGate(s.isConfigured ? "ready" : "needs-setup");
+    });
+  }, []);
 
   const hasSop = meta !== null;
 
@@ -159,6 +177,18 @@ export default function SopWorkspace() {
     setPreviewMode("preview");
     // Let the preview tab paint before invoking the print dialog.
     requestAnimationFrame(() => window.print());
+  }
+
+  if (electronGate === "checking") {
+    return (
+      <main className="h-screen flex items-center justify-center">
+        <Loader2 className="size-6 text-slate-500 animate-spin" />
+      </main>
+    );
+  }
+
+  if (electronGate === "needs-setup") {
+    return <DesktopOnboarding onConfigured={() => setElectronGate("ready")} />;
   }
 
   return (

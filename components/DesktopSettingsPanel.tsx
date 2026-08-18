@@ -31,11 +31,14 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
     const api = window.electronAPI;
     if (!api) return;
     setHasElectronAPI(true);
+    // No auto-open here: first-run setup is DesktopOnboarding's job
+    // (SopWorkspace renders only that until isConfigured is true), so by
+    // the time this panel is reachable at all, a provider is normally
+    // already configured. This just loads current values for the form.
     void api.getSettings().then((s) => {
       setSettings(s);
       setProvider(s.provider);
       setModel(s.model);
-      if (!s.isConfigured) setOpen(true);
     });
   }, []);
 
