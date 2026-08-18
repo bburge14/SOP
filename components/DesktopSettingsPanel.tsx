@@ -85,7 +85,10 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
           {unconfigured && (
             <div className="flex items-start gap-1.5 text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
               <AlertTriangle className="size-3.5 mt-0.5 shrink-0" />
-              <span>Pick a provider and enter an API key to start generating SOPs.</span>
+              <span>
+                Pick a provider and enter an API key to start generating SOPs — or skip for now and set this up
+                later from this gear icon.
+              </span>
             </div>
           )}
 
@@ -133,10 +136,9 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
             <button
               type="button"
               onClick={() => setOpen(false)}
-              disabled={unconfigured}
-              className="text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1.5"
+              className="text-slate-400 hover:text-slate-200 px-3 py-1.5"
             >
-              Cancel
+              {unconfigured ? "Skip for now" : "Cancel"}
             </button>
             <button
               type="button"
