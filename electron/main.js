@@ -136,6 +136,10 @@ function createWindow() {
     width: 1280,
     height: 860,
     title: "SOP Writer",
+    // Only needed in dev — a packaged build already shows the right icon
+    // from the installer/app bundle (electron-builder's `icon` config),
+    // and build/icon.png isn't shipped inside the packaged app anyway.
+    ...(isDev ? { icon: path.join(__dirname, "..", "build", "icon.png") } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

@@ -70,6 +70,10 @@ components/
   DesktopOnboarding.tsx          # full-screen blocking first-run setup gate (desktop only)
 
 types/sop.ts                 # SopDocument, SopVariable, VariableValues, LlmProvider
+
+build/icon.png                # electron-builder's source icon — generates the .ico/.icns/.png set for every platform
+app/icon.png                   # same image, Next.js's file-based favicon convention (auto-wired, no code)
+public/logo.png                 # same image again, used directly in the header/onboarding <img>
 ```
 
 ### Why an adapter interface instead of one SDK

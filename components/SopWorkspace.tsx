@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import TopicInput from "@/components/TopicInput";
 import VariableForm from "@/components/VariableForm";
 import MarkdownPreview, { type PreviewMode } from "@/components/MarkdownPreview";
@@ -203,9 +203,8 @@ export default function SopWorkspace() {
   return (
     <main className="mx-auto max-w-7xl h-screen flex flex-col p-6 gap-5">
       <header className="flex items-center gap-3">
-        <div className="flex items-center justify-center size-9 rounded-lg bg-indigo-600/20 border border-indigo-500/30">
-          <FileText className="size-4.5 text-indigo-400" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- fixed local logo, no need for next/image's optimization pipeline */}
+        <img src="/logo.png" alt="" width={36} height={36} className="size-9 rounded-lg" />
         <div className="flex-1">
           <h1 className="text-lg font-semibold text-white leading-none">SOP Writer</h1>
           <p className="text-xs text-slate-500 mt-0.5">Generate parameterized standard operating procedures</p>

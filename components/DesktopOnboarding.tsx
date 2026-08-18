@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { DesktopProvider } from "@/types/electron";
 import { PROVIDER_INFO } from "@/lib/providerInfo";
 import { DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
@@ -76,9 +76,8 @@ export default function DesktopOnboarding({ onConfigured }: DesktopOnboardingPro
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-panel border border-border rounded-xl p-6 space-y-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-9 rounded-lg bg-indigo-600/20 border border-indigo-500/30">
-            <FileText className="size-4.5 text-indigo-400" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- fixed local logo, no need for next/image's optimization pipeline */}
+          <img src="/logo.png" alt="" width={36} height={36} className="size-9 rounded-lg" />
           <div>
             <h1 className="text-lg font-semibold text-white leading-none">Welcome to SOP Writer</h1>
             <p className="text-xs text-slate-500 mt-0.5">One-time setup before you can generate SOPs</p>
