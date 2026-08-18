@@ -12,7 +12,10 @@ app/
   api/update/route.ts      # GET status / POST pull+build+restart, see "Self-updating"
 
 scripts/
-  supervisor.mjs            # production entrypoint (`npm run serve`) — restarts next start on update
+  install.sh                # clone (if needed) + npm install + build + optional systemd service
+  update.sh                  # CLI equivalent of the GUI "Update Now" button
+  uninstall.sh                # stop/remove the systemd service, optionally purge/delete
+  supervisor.mjs               # fallback production entrypoint (`npm run serve`) for non-systemd hosts
 
 lib/
   update/
@@ -59,7 +62,7 @@ Each adapter still gets the most reliable structured-output mechanism its provid
 
 `lib/sop/template.ts#renderTemplate` does the `{{key}}` substitution entirely client-side against local React state (`values`). Editing a form field or the raw Markdown source re-renders instantly — the API is only called on Generate/Regenerate.
 
-## Setup
+## Quickstart (dev)
 
 ```bash
 npm install
@@ -67,29 +70,48 @@ cp .env.example .env.local   # fill in the key for whichever provider you pick
 npm run dev                  # http://localhost:3000
 ```
 
-### Running self-hosted with self-update enabled
-
-`npm run dev` and a bare `npm start` both work fine, but neither can restart
-itself. To get the "Update Now" button in the GUI to actually apply an
-update, run the app through the supervisor instead:
+## Install (self-hosted, with self-update)
 
 ```bash
-npm run build
-npm run serve      # scripts/supervisor.mjs — wraps `next start`, restarts it on update
+bash <(curl -fsSL https://raw.githubusercontent.com/bburge14/SOP/main/scripts/install.sh)
 ```
 
-The header's commit badge (`git branch icon` + short SHA) opens a panel to
-check for and apply updates. Clicking **Update Now** does, server-side:
-`git fetch` → `git pull --ff-only` → `npm install` → `npm run build` →
-process exit with a code the supervisor recognizes as "relaunch me." The
-supervisor immediately restarts `next start`, now serving the new build; the
-GUI polls until the server responds again and reloads itself.
+This clones the repo (default `~/sop-writer`, override with `--dir`), runs
+`npm install`, walks you through picking an LLM provider + API key into
+`.env.local`, builds a production bundle, and — on Linux with systemd —
+registers and starts a `systemd --user` service named `sop-writer`. Run
+`loginctl enable-linger $USER` afterward so it keeps running after you log
+out. Pass `--no-service` to skip that and just build; `--port PORT` to pick
+a port other than 3000.
+
+Already have a checkout? Run `npm run app:install` (or `bash
+scripts/install.sh`) from inside it instead — it detects the existing
+checkout and installs in place.
+
+### Update
+
+The header's commit badge (git-branch icon + short SHA) opens a panel to
+check for and apply updates from the browser. **Update Now** runs, server-side:
+`git fetch` → `git pull --ff-only` → `npm install` → `npm run build` → restart.
+Or from the CLI: `npm run app:update` (or `bash scripts/update.sh`).
+
+Restart path, in order of preference:
+1. **systemd** — if running as the `sop-writer.service` unit `install.sh` set up, the update triggers `systemctl --user restart sop-writer`. This also gets you crash-restart and start-on-boot for free.
+2. **supervisor** — if started via `npm run serve` (`scripts/supervisor.mjs`) without systemd (e.g. macOS), the app process exits with a sentinel code the supervisor watches for and relaunches `next start`. No crash-restart — it only handles the update-triggered restart.
+3. **manual** — plain `npm run dev` / `npm start`: the update still pulls + rebuilds but reports that you need to restart the process yourself.
 
 Guardrails baked in:
 - Refuses to update if the working tree has uncommitted local changes (won't silently discard your edits).
 - Only fast-forward pulls (`--ff-only`) — a diverged local history fails loudly instead of merging or resetting.
-- Without the supervisor, it still pulls + rebuilds but reports that a manual restart is needed, rather than killing a process nothing will bring back.
 - Set `UPDATE_TOKEN` (see `.env.example`) if this instance is reachable by anyone besides you — the GUI has a small settings gear next to the update panel to store the matching token in that browser's `localStorage`.
+
+### Uninstall
+
+```bash
+npm run app:uninstall                  # stop + remove the systemd service only
+bash scripts/uninstall.sh --purge      # also remove node_modules/ and .next/
+bash scripts/uninstall.sh --remove-all # also delete the whole install directory (confirmation required)
+```
 
 ### Environment variables
 
@@ -100,6 +122,13 @@ Guardrails baked in:
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | `LLM_PROVIDER=openai` | model defaults to `gpt-4o` |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | `LLM_PROVIDER=gemini` | model defaults to `gemini-2.0-flash` |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `LLM_PROVIDER=ollama` | no API key; point at a running `ollama serve`, defaults to `http://localhost:11434` / `llama3.1` |
+
+## Releases
+
+Tagged as `vX.Y.Z` on GitHub (semver, matching the `version` field in
+`package.json`). See [Releases](https://github.com/bburge14/SOP/releases)
+for changelogs. `scripts/install.sh` and `scripts/update.sh` always track
+the `main` branch, not a specific release tag.
 
 ## Notable behavior
 

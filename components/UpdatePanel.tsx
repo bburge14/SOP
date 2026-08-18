@@ -8,7 +8,7 @@ interface Status {
   commit: string | null;
   branch: string | null;
   dirty: boolean;
-  supervised: boolean;
+  restartMode: "systemd" | "supervisor" | "manual";
   remoteCommit?: string | null;
   updateAvailable?: boolean;
 }
@@ -155,7 +155,13 @@ export default function UpdatePanel() {
               </>
             )}
             <dt>Restart mode</dt>
-            <dd className="text-slate-200">{status?.supervised ? "automatic" : "manual (not supervised)"}</dd>
+            <dd className="text-slate-200">
+              {status?.restartMode === "systemd"
+                ? "automatic (systemd)"
+                : status?.restartMode === "supervisor"
+                  ? "automatic (supervisor)"
+                  : "manual"}
+            </dd>
           </dl>
 
           {status?.dirty && (

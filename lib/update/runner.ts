@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import {
   fetchRemote,
   getLocalStatus,
@@ -13,6 +14,10 @@ import {
 // a crash."
 export const RESTART_EXIT_CODE = 75;
 
+// Must match the unit name scripts/install.sh writes to
+// ~/.config/systemd/user/sop-writer.service.
+const SYSTEMD_UNIT = "sop-writer";
+
 /**
  * True only when this process was launched by scripts/supervisor.mjs.
  * `npm run dev` / a bare `next start` won't have this set, so the update
@@ -23,21 +28,53 @@ export function isSupervised(): boolean {
   return process.env.SOP_WRITER_SUPERVISED === "1";
 }
 
+/**
+ * systemd sets INVOCATION_ID for every unit it starts (service or
+ * transient scope), so its presence means we're running as the
+ * sop-writer.service --user unit installed by scripts/install.sh — the
+ * preferred restart path, since systemd also gives us crash-restart and
+ * boot-start for free, unlike the hand-rolled supervisor.
+ */
+function isRunningUnderSystemd(): boolean {
+  return Boolean(process.env.INVOCATION_ID);
+}
+
+/**
+ * `systemctl --user restart` sends SIGTERM to this very process, so the
+ * caller can't await it finishing — fire-and-forget, detached so it
+ * survives this process's death.
+ */
+function restartViaSystemd(): void {
+  const child = spawn("systemctl", ["--user", "restart", SYSTEMD_UNIT], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+}
+
 let updateInProgress = false;
+
+export type RestartMode = "systemd" | "supervisor" | "manual";
+
+function restartMode(): RestartMode {
+  if (isRunningUnderSystemd()) return "systemd";
+  if (isSupervised()) return "supervisor";
+  return "manual";
+}
 
 export interface UpdateStatus {
   isGitCheckout: boolean;
   commit: string | null;
   branch: string | null;
   dirty: boolean;
-  supervised: boolean;
+  restartMode: RestartMode;
   remoteCommit?: string | null;
   updateAvailable?: boolean;
 }
 
 export async function getStatus(checkRemote: boolean): Promise<UpdateStatus> {
   if (!isGitCheckout()) {
-    return { isGitCheckout: false, commit: null, branch: null, dirty: false, supervised: isSupervised() };
+    return { isGitCheckout: false, commit: null, branch: null, dirty: false, restartMode: restartMode() };
   }
 
   const local = await getLocalStatus();
@@ -46,7 +83,7 @@ export async function getStatus(checkRemote: boolean): Promise<UpdateStatus> {
     commit: local.commit,
     branch: local.branch,
     dirty: local.dirty,
-    supervised: isSupervised(),
+    restartMode: restartMode(),
   };
 
   if (!checkRemote) return base;
@@ -115,22 +152,27 @@ export async function performUpdate(): Promise<UpdateResult> {
     log.push("\n$ npm run build");
     log.push(await npmBuild());
 
-    const supervised = isSupervised();
-    if (supervised) {
+    const mode = restartMode();
+    // In both restart paths, delay slightly so the HTTP response below
+    // reaches the client before this process is torn down.
+    if (mode === "systemd") {
+      log.push(`\nUpdate complete. Restarting via systemd unit "${SYSTEMD_UNIT}"…`);
+      setTimeout(restartViaSystemd, 750);
+    } else if (mode === "supervisor") {
       log.push("\nUpdate complete. Restarting server…");
-      // Give the HTTP response time to flush to the client before this
-      // process exits — the supervisor relaunches `next start` on seeing
-      // RESTART_EXIT_CODE, which is what actually serves the new build.
+      // The supervisor (scripts/supervisor.mjs) relaunches `next start` on
+      // seeing RESTART_EXIT_CODE, which is what actually serves the new build.
       setTimeout(() => process.exit(RESTART_EXIT_CODE), 750);
     }
 
     return {
       ok: true,
-      message: supervised
-        ? "Update applied. Restarting server now…"
-        : "Update pulled and built. Restart the server process manually to apply it (not running under the supervisor).",
+      message:
+        mode === "manual"
+          ? "Update pulled and built. Restart the server process manually to apply it (not running under systemd or the supervisor)."
+          : "Update applied. Restarting server now…",
       log: log.join("\n"),
-      restarting: supervised,
+      restarting: mode !== "manual",
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
