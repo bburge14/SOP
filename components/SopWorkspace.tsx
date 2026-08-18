@@ -182,10 +182,27 @@ export default function SopWorkspace() {
     URL.revokeObjectURL(url);
   }
 
-  function handleExportPdf() {
+  async function handleExportPdf() {
     setPreviewMode("preview");
-    // Let the preview tab paint before invoking the print dialog.
-    requestAnimationFrame(() => window.print());
+    // Let the preview tab paint before printing/exporting — needs a frame
+    // either way, whichever path runs.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const api = window.electronAPI;
+    if (api) {
+      // Native path: Chromium's printToPDF straight to a file the user
+      // picks, instead of routing through the OS print dialog — more
+      // reliable, and it's what "Export PDF" should mean: produce a file,
+      // not hand you off to a system dialog to save one yourself.
+      const filename = `${slugify(meta?.title || topic || "sop")}.pdf`;
+      const result = await api.exportPdf(filename);
+      if (!result.ok && !result.canceled) {
+        setError(result.error || "Failed to export PDF.");
+      }
+      return;
+    }
+
+    window.print();
   }
 
   if (electronGate === "checking") {

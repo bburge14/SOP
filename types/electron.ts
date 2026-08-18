@@ -14,6 +14,13 @@ export interface DesktopUpdateStatus {
   message?: string;
 }
 
+export interface PdfExportResult {
+  ok: boolean;
+  canceled?: boolean;
+  path?: string;
+  error?: string;
+}
+
 export interface ElectronAPI {
   isElectron: true;
   getSettings: () => Promise<DesktopSettings>;
@@ -23,6 +30,7 @@ export interface ElectronAPI {
   quitAndInstall: () => Promise<void>;
   onUpdateStatus: (callback: (status: DesktopUpdateStatus) => void) => () => void;
   getAppVersion: () => Promise<string>;
+  exportPdf: (suggestedName: string) => Promise<PdfExportResult>;
 }
 
 declare global {

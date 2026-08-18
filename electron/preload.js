@@ -20,4 +20,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   getAppVersion: () => ipcRenderer.invoke("app:version"),
+
+  exportPdf: (suggestedName) => ipcRenderer.invoke("export:pdf", suggestedName),
 });

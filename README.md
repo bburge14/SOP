@@ -193,7 +193,7 @@ only) always track the `main` branch, not a specific release tag.
 ## Notable behavior
 
 - **Add Custom Field** adds a form field immediately; paste `{{your_key}}` into the Source tab to wire it into the document. Conversely, typing a new `{{key}}` directly into Source auto-creates its form field — the two directions are kept in sync in `SopWorkspace.tsx#handleTemplateChange`.
-- **Export PDF** uses the browser's native print dialog against a `#print-target`-scoped print stylesheet (`app/globals.css`) — no server-side rendering dependency.
+- **Export PDF**: on desktop, `electron/main.js`'s `export:pdf` IPC handler calls `webContents.printToPDF()` directly and writes the buffer to a file the user picks via a native save dialog — a real, text-searchable PDF, not a screenshot. Self-hosted (no `window.electronAPI`) falls back to the browser's native print dialog. Both render against the same `#print-target`-scoped print stylesheet in `app/globals.css`, which explicitly overrides the app's dark theme to a light/print-appropriate palette — reproduced live before this existed: without those overrides, the exported "document" was the dark UI verbatim (white text on black), which is exactly why it read as a screen grab rather than a document. Verified via `printToPDF` + `pdftoppm`/`pdftotext`: real vector text, not a rasterized image, and correctly light-themed regardless of the app's dark UI.
 - **Regenerate** discards current field values/edits after a confirm prompt, then re-runs the same topic through the pipeline.
 
 <!-- last verified: install/update/uninstall lifecycle tested end-to-end -->

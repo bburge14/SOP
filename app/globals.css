@@ -68,6 +68,15 @@ body {
 }
 
 @media print {
+  /* Without this, print/PDF output was the app's dark theme verbatim —
+     white text on a black page. Reproduced live via a print-media
+     screenshot before this existed: it genuinely looked like a
+     screenshot of the UI, not a document, because only visibility was
+     touched — colors were never overridden for the light page a printer
+     or "Save as PDF" actually renders onto. */
+  body {
+    background: #ffffff !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -80,5 +89,48 @@ body {
     left: 0;
     top: 0;
     width: 100%;
+    background: #ffffff;
+    padding: 0;
+  }
+  #print-target .sop-prose {
+    color: #1e293b;
+  }
+  #print-target .sop-prose h1,
+  #print-target .sop-prose h2,
+  #print-target .sop-prose h3 {
+    color: #0f172a;
+  }
+  #print-target .sop-prose h2 {
+    border-color: #cbd5e1;
+  }
+  #print-target .sop-prose a {
+    color: #1d4ed8;
+  }
+  #print-target .sop-prose code {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #334155;
+  }
+  #print-target .sop-prose pre {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+  #print-target .sop-prose pre code {
+    color: #1e293b;
+  }
+  #print-target .sop-prose blockquote {
+    border-color: #94a3b8;
+    color: #475569;
+  }
+  #print-target .sop-prose th,
+  #print-target .sop-prose td {
+    border-color: #cbd5e1;
+  }
+  #print-target .sop-prose hr {
+    border-color: #cbd5e1;
+  }
+  #print-target .unbound-placeholder {
+    background: #fef3c7;
+    color: #92400e;
   }
 }

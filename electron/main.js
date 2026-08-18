@@ -7,6 +7,7 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("node:path");
+const fs = require("node:fs/promises");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const settingsStore = require("./settingsStore");
@@ -201,6 +202,36 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("app:version", () => app.getVersion());
+
+  ipcMain.handle("export:pdf", async (_event, suggestedName) => {
+    if (!mainWindow) return { ok: false, error: "No window available" };
+    const defaultName = typeof suggestedName === "string" && suggestedName.trim() ? suggestedName.trim() : "sop.pdf";
+
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: "Export SOP as PDF",
+      defaultPath: defaultName,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
+
+    try {
+      // Chromium's print pipeline (same one window.print() would use) —
+      // respects the app's @media print CSS, so the light/print-specific
+      // styling in app/globals.css applies here too. printBackground:true
+      // is required or the code-block/table shading is silently dropped.
+      const pdfBuffer = await mainWindow.webContents.printToPDF({
+        printBackground: true,
+        pageSize: "Letter",
+      });
+      await fs.writeFile(filePath, pdfBuffer);
+      log(`exported PDF to ${filePath}`);
+      return { ok: true, path: filePath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log("PDF export failed:", message);
+      return { ok: false, error: message };
+    }
+  });
 }
 
 const gotLock = app.requestSingleInstanceLock();
