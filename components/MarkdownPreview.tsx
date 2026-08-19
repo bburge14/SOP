@@ -1,10 +1,12 @@
 "use client";
 
+import { useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Code2, Eye } from "lucide-react";
 import type { VariableValues } from "@/types/sop";
 import { renderTemplate } from "@/lib/sop/template";
+import MarkdownToolbar from "@/components/MarkdownToolbar";
 
 export type PreviewMode = "preview" | "source";
 
@@ -18,6 +20,7 @@ interface MarkdownPreviewProps {
 
 export default function MarkdownPreview({ template, values, onTemplateChange, mode, onModeChange }: MarkdownPreviewProps) {
   const rendered = renderTemplate(template, values);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   return (
     <div className="flex flex-col h-full">
@@ -30,7 +33,7 @@ export default function MarkdownPreview({ template, values, onTemplateChange, mo
         </TabButton>
       </div>
 
-      <div className="flex-1 min-h-0 bg-panel border border-border rounded-lg overflow-hidden">
+      <div className="flex-1 min-h-0 bg-panel border border-border rounded-lg overflow-hidden flex flex-col">
         {mode === "preview" ? (
           <div id="print-target" className="h-full overflow-y-auto p-6">
             <div className="sop-prose">
@@ -38,12 +41,16 @@ export default function MarkdownPreview({ template, values, onTemplateChange, mo
             </div>
           </div>
         ) : (
-          <textarea
-            value={template}
-            onChange={(e) => onTemplateChange(e.target.value)}
-            spellCheck={false}
-            className="w-full h-full resize-none bg-transparent p-4 font-mono text-xs leading-relaxed text-slate-300 focus:outline-none"
-          />
+          <div className="flex flex-col h-full p-2 pb-0">
+            <MarkdownToolbar textareaRef={textareaRef} value={template} onChange={onTemplateChange} />
+            <textarea
+              ref={textareaRef}
+              value={template}
+              onChange={(e) => onTemplateChange(e.target.value)}
+              spellCheck={false}
+              className="w-full flex-1 min-h-0 resize-none bg-transparent p-2 font-mono text-xs leading-relaxed text-slate-300 focus:outline-none"
+            />
+          </div>
         )}
       </div>
     </div>

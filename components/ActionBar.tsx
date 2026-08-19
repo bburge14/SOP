@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useRef, useState } from "react";
-import { Check, Copy, Download, FileType2, ImagePlus, Loader2, Printer, RefreshCw } from "lucide-react";
+import { Check, Copy, Download, FileType2, ImagePlus, Loader2, Printer, RefreshCw, ScanSearch } from "lucide-react";
 import AddFieldDialog from "@/components/AddFieldDialog";
 import type { SopVariable } from "@/types/sop";
 
@@ -17,6 +17,8 @@ interface ActionBarProps {
   onInsertImage: (file: File) => void;
   existingKeys: Set<string>;
   onAddField: (variable: SopVariable) => void;
+  onAnalyzeWithAi: () => void;
+  analyzing: boolean;
 }
 
 export default function ActionBar({
@@ -31,6 +33,8 @@ export default function ActionBar({
   onInsertImage,
   existingKeys,
   onAddField,
+  onAnalyzeWithAi,
+  analyzing,
 }: ActionBarProps) {
   const [copied, setCopied] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +64,17 @@ export default function ActionBar({
       </button>
 
       <AddFieldDialog existingKeys={existingKeys} onAdd={onAddField} />
+
+      <button
+        type="button"
+        onClick={onAnalyzeWithAi}
+        disabled={disabled || analyzing}
+        title="Send this document to your AI provider to find and parameterize site-specific values"
+        className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        {analyzing ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />}
+        Scan with AI
+      </button>
 
       <input
         ref={imageInputRef}

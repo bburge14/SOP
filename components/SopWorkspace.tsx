@@ -13,6 +13,7 @@ import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { docxToMarkdown } from "@/lib/sop/docxToMarkdown";
+import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
 import type { SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
@@ -43,6 +44,7 @@ export default function SopWorkspace() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
   // gate only applies to the desktop app, which has no .env.local a
@@ -127,19 +129,34 @@ export default function SopWorkspace() {
       return;
     }
 
+    // Local, no-AI-call pass: finds IPs/MACs/emails/explicit "fill this in"
+    // markers and turns them into {{key}} placeholders too, on top of any
+    // {{key}} the document already had. Runs on every import automatically
+    // since nothing leaves the machine for this — see handleAnalyzeWithAi
+    // for the optional, explicit, more-thorough alternative.
+    const { template: templatized, defaults: heuristicDefaults } = detectAndTemplatizeVariables(
+      text,
+      new Set(extractPlaceholders(text))
+    );
+    text = templatized;
+
     // Best-effort title: first Markdown H1 in the file, else the filename.
     const titleMatch = /^#\s+(.+)$/m.exec(text);
     const derivedTitle = titleMatch?.[1]?.trim() || file.name.replace(/\.(md|markdown|txt|docx)$/i, "");
 
     // Same auto-detection SopWorkspace already uses when you hand-edit the
     // Source tab (handleTemplateChange) — any {{key}} in the imported text
-    // becomes an editable field, with a sensible default type/label.
+    // becomes an editable field, with a sensible default type/label. Fields
+    // the heuristic pass just inserted get their actual found value as the
+    // default (so the document still renders exactly as imported); plain
+    // pre-existing {{key}} placeholders have no known default, same as before.
     const placeholders = extractPlaceholders(text);
     const importedVariables: SopVariable[] = placeholders.map((key) => ({
       key,
       label: humanizeKey(key),
-      description: "Detected from the imported document.",
-      default: "",
+      description:
+        key in heuristicDefaults ? "Auto-detected value — review it and adjust if needed." : "Detected from the imported document.",
+      default: heuristicDefaults[key] ?? "",
       type: "string" as const,
     }));
 
@@ -159,6 +176,54 @@ export default function SopWorkspace() {
     setPreviewMode("source");
     setError(null);
     setErrorDetail(null);
+  }
+
+  async function handleAnalyzeWithAi() {
+    if (!template.trim()) return;
+    const confirmed = window.confirm(
+      "This sends the full document (not just a topic) to your configured AI provider so it can find and parameterize " +
+        "site-specific values. Unlike normal generation, the whole document leaves this machine for this one action. " +
+        "Don't do this with proprietary or confidential content. Continue?"
+    );
+    if (!confirmed) return;
+
+    setAnalyzing(true);
+    setError(null);
+    setErrorDetail(null);
+    try {
+      const res = await fetch("/api/analyze-import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ document: renderTemplate(template, values) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to analyze document.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
+
+      const sop = data.sop as {
+        title: string;
+        category: string;
+        overview: string;
+        prerequisites: string[];
+        variables: SopVariable[];
+        template_markdown: string;
+      };
+
+      setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+      setVariables(sop.variables);
+      setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
+      setTemplate(sop.template_markdown);
+      // Still part of the Import workflow (adjusting user-supplied content),
+      // not the trusted from-scratch Generate pipeline — kept removable.
+      setCustomKeys(new Set(sop.variables.map((v) => v.key)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error analyzing document.");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   function handleRegenerate() {
@@ -409,7 +474,7 @@ export default function SopWorkspace() {
             <ActionBar
               onRegenerate={handleRegenerate}
               regenerating={loading}
-              disabled={loading}
+              disabled={loading || analyzing}
               onCopy={handleCopy}
               onExportMarkdown={handleExportMarkdown}
               onExportPdf={handleExportPdf}
@@ -418,6 +483,8 @@ export default function SopWorkspace() {
               onInsertImage={(f) => void handleInsertImage(f)}
               existingKeys={new Set(variables.map((v) => v.key))}
               onAddField={handleAddField}
+              onAnalyzeWithAi={() => void handleAnalyzeWithAi()}
+              analyzing={analyzing}
             />
             <MarkdownPreview
               template={template}
