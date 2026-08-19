@@ -37,3 +37,26 @@ export interface ContextAttachment {
   content: string;
   redactedCount?: number;
 }
+
+/**
+ * A SOP saved to the local library (lib/sop/library.ts, IndexedDB — never
+ * synced or sent anywhere). Loading one back into the workspace is a pure
+ * local-state operation, same as Import — it never triggers an AI call by
+ * itself, so nothing here is ever seen by the AI unless you take one of the
+ * app's existing explicit AI actions (Generate/Regenerate/Scan with
+ * AI/Review & Improve) after loading it into the active session.
+ */
+export interface SavedSop {
+  id: string;
+  title: string;
+  category: string;
+  overview: string;
+  prerequisites: string[];
+  variables: SopVariable[];
+  values: VariableValues;
+  template: string;
+  customKeys: string[];
+  topic: string;
+  createdAt: string;
+  updatedAt: string;
+}

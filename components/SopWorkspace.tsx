@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Library as LibraryIcon, Loader2, Save } from "lucide-react";
 import TopicInput from "@/components/TopicInput";
 import VariableForm from "@/components/VariableForm";
 import MarkdownPreview, { type PreviewMode } from "@/components/MarkdownPreview";
@@ -11,13 +11,15 @@ import DesktopUpdatePanel from "@/components/DesktopUpdatePanel";
 import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/PreferencesPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
+import LibraryPanel from "@/components/LibraryPanel";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
 import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
 import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
 import { redactSecrets } from "@/lib/sop/redactSecrets";
-import type { ContextAttachment, SopVariable, VariableValues } from "@/types/sop";
+import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
+import type { ContextAttachment, SavedSop, SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
 
@@ -49,6 +51,17 @@ export default function SopWorkspace() {
   const [exportingDocx, setExportingDocx] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [improving, setImproving] = useState(false);
+  // Set when the current document was loaded from (or just saved to) the
+  // library, so a subsequent Save updates that same record instead of
+  // creating a duplicate. Cleared by any action that replaces the whole
+  // document (Generate, Regenerate, Import, Start Blank) — those already
+  // confirm "this discards your current edits", and re-linking to the old
+  // library entry after a full replacement would risk a surprise overwrite
+  // on the next save. AI-assisted *edits* to the same document (Scan with
+  // AI, Review & Improve) keep it, since they're editing in place.
+  const [libraryId, setLibraryId] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // Defaults true (matches readHoverHighlightEnabled's own default) and only
   // reads the real localStorage value in an effect — same "don't touch
@@ -115,6 +128,7 @@ export default function SopWorkspace() {
       setTemplate(sop.template_markdown);
       setCustomKeys(new Set());
       setPreviewMode("preview");
+      setLibraryId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error generating SOP.");
     } finally {
@@ -195,6 +209,7 @@ export default function SopWorkspace() {
     // reference files attached for a previous generation attempt wouldn't
     // meaningfully apply to a freshly-imported, unrelated document.
     setContextFiles([]);
+    setLibraryId(null);
   }
 
   // Takes the whole batch from one file-picker selection at once, rather
@@ -386,6 +401,63 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     setContextFiles([]);
+    setLibraryId(null);
+  }
+
+  async function handleSaveToLibrary() {
+    if (!meta) return;
+    setSaving(true);
+    try {
+      const id = libraryId ?? crypto.randomUUID();
+      const now = new Date().toISOString();
+      const record: SavedSop = {
+        id,
+        title: meta.title,
+        category: meta.category,
+        overview: meta.overview,
+        prerequisites: meta.prerequisites,
+        variables,
+        values,
+        template,
+        customKeys: Array.from(customKeys),
+        topic,
+        createdAt: libraryId ? "" : now, // overwritten below when updating an existing record
+        updatedAt: now,
+      };
+      // Preserve the original createdAt when updating an existing record —
+      // saveSopToLibrary does a plain put(), so without this an update would
+      // silently lose when the SOP was first saved.
+      if (libraryId) {
+        const all = await listSavedSops();
+        const prior = all.find((s) => s.id === libraryId);
+        record.createdAt = prior?.createdAt || now;
+      }
+      await saveSopToLibrary(record);
+      setLibraryId(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save to the library.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleLoadFromLibrary(sop: SavedSop) {
+    if (hasSop) {
+      const confirmed = window.confirm("Loading a saved SOP will discard your current field values and edits. Continue?");
+      if (!confirmed) return;
+    }
+    setTopic(sop.topic);
+    setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+    setVariables(sop.variables);
+    setValues(sop.values);
+    setTemplate(sop.template);
+    setCustomKeys(new Set(sop.customKeys));
+    setPreviewMode("preview");
+    setError(null);
+    setErrorDetail(null);
+    setContextFiles([]);
+    setLibraryId(sop.id);
+    setLibraryOpen(false);
   }
 
   function handleRegenerate() {
@@ -556,15 +628,27 @@ export default function SopWorkspace() {
           <h1 className="text-lg font-semibold text-white leading-none">SOP Writer</h1>
           <p className="text-xs text-slate-500 mt-0.5">Generate parameterized standard operating procedures</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setLibraryOpen(true)}
+          title="Browse saved SOPs (local to this device)"
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded-md transition-colors"
+        >
+          <LibraryIcon className="size-3.5" />
+          Library
+        </button>
         <UpdatePanel />
         <DesktopUpdatePanel />
         <PreferencesPanel hoverHighlightEnabled={hoverHighlightEnabled} onHoverHighlightChange={setHoverHighlightEnabled} />
         <DesktopSettingsPanel />
       </header>
 
+      <LibraryPanel open={libraryOpen} onClose={() => setLibraryOpen(false)} onLoad={handleLoadFromLibrary} />
+
       <TopicInput
         onSubmit={(t) => void generate(t)}
         onImport={(f) => void handleImport(f)}
+        onStartBlank={handleStartBlank}
         loading={loading}
         initialValue={topic}
         contextFiles={contextFiles}
@@ -613,10 +697,30 @@ export default function SopWorkspace() {
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5">
           <div className="flex flex-col min-h-0 gap-4 overflow-y-auto pr-1">
             <div>
-              <span className="inline-block text-[11px] font-medium uppercase tracking-wide text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 mb-2">
-                {meta.category}
-              </span>
-              <h2 className="text-base font-semibold text-white">{meta.title}</h2>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <input
+                  value={meta.category}
+                  onChange={(e) => setMeta((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                  title="Category — used to organize the library"
+                  className="text-[11px] font-medium uppercase tracking-wide text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-32"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveToLibrary()}
+                  disabled={saving}
+                  title={libraryId ? "Update this SOP in the library" : "Save this SOP to the local library"}
+                  className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 transition-colors"
+                >
+                  {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                  {libraryId ? "Update Saved Copy" : "Save to Library"}
+                </button>
+              </div>
+              <input
+                value={meta.title}
+                onChange={(e) => setMeta((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
+                title="SOP title"
+                className="text-base font-semibold text-white bg-transparent border border-transparent hover:border-border focus:border-border rounded px-1 -mx-1 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
+              />
               <p className="text-sm text-slate-400 mt-1">{meta.overview}</p>
             </div>
 

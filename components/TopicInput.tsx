@@ -1,12 +1,13 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
-import { FileText, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
+import { FilePlus2, FileText, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
 import type { ContextAttachment } from "@/types/sop";
 
 interface TopicInputProps {
   onSubmit: (topic: string) => void;
   onImport: (file: File) => void;
+  onStartBlank: () => void;
   loading: boolean;
   initialValue?: string;
   contextFiles: ContextAttachment[];
@@ -17,6 +18,7 @@ interface TopicInputProps {
 export default function TopicInput({
   onSubmit,
   onImport,
+  onStartBlank,
   loading,
   initialValue = "",
   contextFiles,
@@ -89,6 +91,16 @@ export default function TopicInput({
           Attach Reference
         </button>
         <button
+          type="button"
+          onClick={onStartBlank}
+          disabled={loading}
+          title="Start a blank SOP to hand-write, no AI call"
+          className="flex items-center gap-2 border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+        >
+          <FilePlus2 className="size-4" />
+          New
+        </button>
+        <button
           type="submit"
           disabled={loading || !topic.trim()}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
@@ -135,8 +147,8 @@ export default function TopicInput({
           external AI service to generate content. Attached reference files (README/source/config for your own
           internal or non-public tools) are sent in full the same way — values that look like API keys, passwords,
           or tokens are automatically redacted before attaching, but that&apos;s best-effort, not a guarantee, so
-          only attach what you&apos;re comfortable sharing with your AI provider. Nothing you generate is saved by
-          this app; export what you want to keep.
+          only attach what you&apos;re comfortable sharing with your AI provider. Nothing is saved unless you click
+          Save to Library — saved SOPs stay on this device and are never sent anywhere on their own.
         </span>
       </p>
     </div>
