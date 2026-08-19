@@ -1,4 +1,3 @@
-import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, LlmConfigError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/llm/modelOptions";
 import { fetchWithRetry } from "@/lib/llm/retry";
@@ -21,7 +20,7 @@ export class GeminiAdapter implements LlmAdapter {
     this.model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   }
 
-  async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+  async generate(systemPrompt: string, userPrompt: string, jsonSchema: object): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
 
     const res = await fetchWithRetry(url, {
@@ -32,7 +31,7 @@ export class GeminiAdapter implements LlmAdapter {
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: sopJsonSchema,
+          responseSchema: jsonSchema,
         },
       }),
     });

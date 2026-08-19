@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { getLlmAdapter } from "@/lib/llm";
-import { SOP_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/llm/prompt";
+import { SUGGEST_IDEAS_SYSTEM_PROMPT, buildSuggestIdeasPrompt } from "@/lib/llm/prompt";
+import { sopIdeasJsonSchema, sopIdeasZodSchema } from "@/lib/llm/schema";
 import { extractAndParseJson } from "@/lib/sop/parseJson";
-import { validateAndReconcile } from "@/lib/sop/reconcile";
-import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, LlmConfigError } from "@/lib/llm/types";
 import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
 import type { ContextAttachment } from "@/types/sop";
@@ -13,45 +12,40 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let topic: unknown;
   let context: unknown;
   try {
-    ({ topic, context } = await req.json());
+    ({ context } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
 
-  if (typeof topic !== "string" || topic.trim().length < 3) {
-    return NextResponse.json(
-      { error: "`topic` must be a non-empty string describing the task or technology." },
-      { status: 400 }
-    );
-  }
-  if (topic.length > 500) {
-    return NextResponse.json({ error: "`topic` must be 500 characters or fewer." }, { status: 400 });
-  }
-
   const contextAttachments = validateContext(context);
   if (contextAttachments instanceof NextResponse) return contextAttachments;
+  if (contextAttachments.length === 0) {
+    return NextResponse.json({ error: "Attach at least one reference file to suggest ideas from." }, { status: 400 });
+  }
 
   try {
     const adapter = getLlmAdapter();
-    const raw = await adapter.generate(SOP_SYSTEM_PROMPT, buildUserPrompt(topic, contextAttachments), sopJsonSchema);
+    const raw = await adapter.generate(
+      SUGGEST_IDEAS_SYSTEM_PROMPT,
+      buildSuggestIdeasPrompt(contextAttachments),
+      sopIdeasJsonSchema
+    );
     const parsed = extractAndParseJson(raw);
-    const sop = validateAndReconcile(parsed);
-    return NextResponse.json({ sop });
+    const { ideas } = sopIdeasZodSchema.parse(parsed);
+    return NextResponse.json({ ideas });
   } catch (err) {
-    // Full technical detail goes to the server log — never lost, just not
-    // dumped raw into the error banner (reported live: a Gemini 503 body
-    // rendered verbatim in the UI). The client gets a clean message plus
-    // an optional `detail` string for an opt-in "show technical details."
-    console.error("[api/generate]", err);
+    console.error("[api/suggest-ideas]", err);
     const { message, detail } = describeError(err);
     return NextResponse.json({ error: message, detail }, { status: statusFor(err) });
   }
 }
 
-/** Returns the validated attachments, or a ready-to-return 400 response on bad input. */
+// Same validation as /api/generate's `context` field — duplicated rather
+// than shared, since the two routes' surrounding logic differs enough
+// (context is optional there, required here) that a shared helper would
+// need its own parameters for that difference anyway.
 function validateContext(context: unknown): ContextAttachment[] | NextResponse {
   if (context === undefined || context === null) return [];
 
@@ -91,10 +85,6 @@ function validateContext(context: unknown): ContextAttachment[] | NextResponse {
 }
 
 function statusFor(err: unknown): number {
-  // Not configured (500, fix it in Settings) is distinct from the
-  // provider's own request failing (502, possibly transient) — checked by
-  // type, not by matching message text, which silently broke once already
-  // when the wording changed but a string check on it didn't.
   if (err instanceof LlmConfigError) return 500;
   return 502;
 }
@@ -103,7 +93,7 @@ function describeError(err: unknown): { message: string; detail?: string } {
   if (err instanceof ZodError) {
     const issues = err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
     return {
-      message: "The AI's response wasn't formatted correctly. This is usually temporary — try regenerating.",
+      message: "The AI's response wasn't formatted correctly. This is usually temporary — try again.",
       detail: issues,
     };
   }
@@ -113,5 +103,5 @@ function describeError(err: unknown): { message: string; detail?: string } {
   if (err instanceof Error) {
     return { message: err.message };
   }
-  return { message: "Unknown error generating SOP." };
+  return { message: "Unknown error suggesting SOP ideas." };
 }

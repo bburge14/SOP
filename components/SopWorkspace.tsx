@@ -19,7 +19,7 @@ import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
 import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
 import { redactSecrets } from "@/lib/sop/redactSecrets";
 import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
-import type { ContextAttachment, SavedSop, SopVariable, VariableValues } from "@/types/sop";
+import type { ContextAttachment, SavedSop, SopIdea, SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
 
@@ -62,6 +62,8 @@ export default function SopWorkspace() {
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [suggestedIdeas, setSuggestedIdeas] = useState<SopIdea[] | null>(null);
+  const [suggestingIdeas, setSuggestingIdeas] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // Defaults true (matches readHoverHighlightEnabled's own default) and only
   // reads the real localStorage value in an effect — same "don't touch
@@ -285,6 +287,33 @@ export default function SopWorkspace() {
 
   function handleRemoveContextFile(name: string) {
     setContextFiles((prev) => prev.filter((f) => f.name !== name));
+  }
+
+  async function handleSuggestIdeas() {
+    if (contextFiles.length === 0) return;
+    setSuggestingIdeas(true);
+    setSuggestedIdeas(null);
+    setError(null);
+    setErrorDetail(null);
+    try {
+      // contextFiles are already redacted at attach time (handleAddContextFiles).
+      const res = await fetch("/api/suggest-ideas", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ context: contextFiles }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to suggest SOP ideas.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
+      setSuggestedIdeas(data.ideas as SopIdea[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error suggesting SOP ideas.");
+    } finally {
+      setSuggestingIdeas(false);
+    }
   }
 
   async function handleAnalyzeWithAi() {
@@ -654,6 +683,10 @@ export default function SopWorkspace() {
         contextFiles={contextFiles}
         onAddContextFiles={(files) => void handleAddContextFiles(files)}
         onRemoveContextFile={handleRemoveContextFile}
+        onSuggestIdeas={() => void handleSuggestIdeas()}
+        suggestingIdeas={suggestingIdeas}
+        suggestedIdeas={suggestedIdeas}
+        onClearSuggestedIdeas={() => setSuggestedIdeas(null)}
       />
 
       {error && (

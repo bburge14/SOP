@@ -78,3 +78,21 @@ Rules:
 export function buildReviewImprovePrompt(document: string): string {
   return `Here is the full text of an existing SOP to review and improve:\n\n${document.trim()}`;
 }
+
+// Used by "Suggest Ideas" — the user has attached documentation/manuals for
+// a tool or system and wants to know what SOPs are worth writing for it,
+// not fill in one they already decided on. Deliberately does NOT reuse
+// SOP_SYSTEM_PROMPT's output shape (see sopIdeasZodSchema/sopIdeasJsonSchema).
+export const SUGGEST_IDEAS_SYSTEM_PROMPT = `You are helping an operations engineer figure out which standard operating procedures (SOPs) are worth writing for a tool, system, or environment, based on documentation they've attached (READMEs, manuals, config references, etc.).
+
+Rules:
+- Propose SOP ideas grounded in what the reference material actually describes — specific procedures, commands, workflows, or configuration steps that are genuinely present or clearly implied in the material. Do not propose ideas for capabilities the material doesn't mention.
+- Favor concrete, actionable procedures a technical writer could immediately turn into a full SOP (e.g. "Rotate the {{tool}} API credentials" or "Provision a new tenant in {{tool}}") over vague categories (e.g. "Tool administration").
+- Each title should be phrased as a real task/procedure, suitable for pasting directly into a "generate an SOP for X" prompt as-is — not a question, not a document section name.
+- Prefer covering genuinely different procedures over minor variations of the same one. Propose as many as the material actually supports, typically 3-8 — fewer if the material is thin, don't pad with filler ideas just to hit a count.
+- Each description should briefly say why this is worth its own SOP, referencing what's actually in the material (a specific command, workflow, or risk it involves) rather than generic justification.`;
+
+export function buildSuggestIdeasPrompt(context: ContextAttachment[]): string {
+  const material = context.map((f) => `### ${f.name}\n${f.content.trim()}`).join("\n\n");
+  return `Here is the reference material to base SOP ideas on:\n\n${material}`;
+}

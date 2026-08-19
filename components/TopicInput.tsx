@@ -1,8 +1,19 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { FilePlus2, FileText, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
-import type { ContextAttachment } from "@/types/sop";
+import {
+  FilePlus2,
+  FileText,
+  Lightbulb,
+  Loader2,
+  Paperclip,
+  ShieldAlert,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
+import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
+import type { ContextAttachment, SopIdea } from "@/types/sop";
 
 interface TopicInputProps {
   onSubmit: (topic: string) => void;
@@ -13,6 +24,10 @@ interface TopicInputProps {
   contextFiles: ContextAttachment[];
   onAddContextFiles: (files: File[]) => void;
   onRemoveContextFile: (name: string) => void;
+  onSuggestIdeas: () => void;
+  suggestingIdeas: boolean;
+  suggestedIdeas: SopIdea[] | null;
+  onClearSuggestedIdeas: () => void;
 }
 
 export default function TopicInput({
@@ -24,10 +39,16 @@ export default function TopicInput({
   contextFiles,
   onAddContextFiles,
   onRemoveContextFile,
+  onSuggestIdeas,
+  suggestingIdeas,
+  suggestedIdeas,
+  onClearSuggestedIdeas,
 }: TopicInputProps) {
   const [topic, setTopic] = useState(initialValue);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextInputRef = useRef<HTMLInputElement>(null);
+  const ideasPanelRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(ideasPanelRef, onClearSuggestedIdeas, suggestedIdeas !== null);
 
   // `initialValue` is only consumed by useState on the very first render —
   // without this, the box silently kept showing "" after Import (which sets
@@ -38,6 +59,11 @@ export default function TopicInput({
   // afterward. Only resyncs when `initialValue` itself changes, so it
   // doesn't fight with the user's own typing (which never touches that prop).
   useEffect(() => setTopic(initialValue), [initialValue]);
+
+  function handlePickIdea(idea: SopIdea) {
+    setTopic(idea.title);
+    onClearSuggestedIdeas();
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -147,6 +173,43 @@ export default function TopicInput({
               </button>
             </span>
           ))}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={onSuggestIdeas}
+              disabled={loading || suggestingIdeas}
+              title="Ask the AI what SOPs are worth writing based on the attached files"
+              className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {suggestingIdeas ? <Loader2 className="size-3.5 animate-spin" /> : <Lightbulb className="size-3.5" />}
+              Suggest Ideas
+            </button>
+
+            {suggestedIdeas && (
+              <div
+                ref={ideasPanelRef}
+                className="absolute left-0 z-20 mt-2 w-96 bg-panel border border-border rounded-lg p-3 shadow-xl space-y-1.5 max-h-80 overflow-y-auto"
+              >
+                <h3 className="text-xs font-semibold text-white px-1 pb-1">SOP ideas from your attached files</h3>
+                {suggestedIdeas.length === 0 ? (
+                  <p className="text-xs text-slate-500 px-1 pb-1">No ideas came back — try attaching more detailed material.</p>
+                ) : (
+                  suggestedIdeas.map((idea, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handlePickIdea(idea)}
+                      className="block w-full text-left rounded-md px-2 py-1.5 hover:bg-white/5 transition-colors"
+                    >
+                      <span className="block text-sm text-slate-200">{idea.title}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">{idea.description}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

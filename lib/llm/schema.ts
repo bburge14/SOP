@@ -74,3 +74,46 @@ export const sopJsonSchema = {
   },
   required: ["title", "category", "overview", "prerequisites", "variables", "template_markdown"],
 } as const;
+
+/**
+ * Shape for "Suggest Ideas" (app/api/suggest-ideas/route.ts) — a list of
+ * candidate SOP topics grounded in attached reference material, not a full
+ * SOP. Separate from sopJsonSchema/sopZodSchema on purpose: forcing this
+ * response through the single-SOP shape (title/variables/template_markdown
+ * etc.) would produce nonsense, since there's no single procedure yet, just
+ * a list of ones worth writing.
+ */
+export const sopIdeasZodSchema = z.object({
+  ideas: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        description: z.string().min(1),
+      })
+    )
+    .min(1),
+});
+
+export const sopIdeasJsonSchema = {
+  type: "object",
+  properties: {
+    ideas: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "A short, specific SOP topic — phrased so it could be pasted directly into a 'generate an SOP for X' prompt as-is",
+          },
+          description: {
+            type: "string",
+            description: "1-2 sentences on why this SOP is worth writing, grounded in what the reference material actually describes",
+          },
+        },
+        required: ["title", "description"],
+      },
+    },
+  },
+  required: ["ideas"],
+} as const;

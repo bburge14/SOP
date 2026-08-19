@@ -60,3 +60,9 @@ export interface SavedSop {
   createdAt: string;
   updatedAt: string;
 }
+
+/** One candidate SOP topic proposed by "Suggest Ideas" from attached reference material. */
+export interface SopIdea {
+  title: string;
+  description: string;
+}

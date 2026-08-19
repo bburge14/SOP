@@ -1,4 +1,3 @@
-import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, type LlmAdapter } from "@/lib/llm/types";
 import { fetchWithRetry } from "@/lib/llm/retry";
 import { humanizeProviderError } from "@/lib/llm/humanizeError";
@@ -21,9 +20,9 @@ export class OllamaAdapter implements LlmAdapter {
     this.model = process.env.OLLAMA_MODEL || "llama3.1";
   }
 
-  async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+  async generate(systemPrompt: string, userPrompt: string, jsonSchema: object): Promise<string> {
     const schemaHint = `\n\nRespond with ONLY a single JSON object (no prose, no markdown fences) matching exactly this JSON Schema:\n${JSON.stringify(
-      sopJsonSchema
+      jsonSchema
     )}`;
 
     let res: Response;

@@ -1,4 +1,3 @@
-import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, LlmConfigError, type LlmAdapter } from "@/lib/llm/types";
 import { DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
 import { fetchWithRetry } from "@/lib/llm/retry";
@@ -23,7 +22,7 @@ export class OpenAiAdapter implements LlmAdapter {
     this.model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
   }
 
-  async generate(systemPrompt: string, userPrompt: string): Promise<string> {
+  async generate(systemPrompt: string, userPrompt: string, jsonSchema: object): Promise<string> {
     const res = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -41,8 +40,8 @@ export class OpenAiAdapter implements LlmAdapter {
             type: "function",
             function: {
               name: FUNCTION_NAME,
-              description: "Emit the generated SOP as structured data.",
-              parameters: sopJsonSchema,
+              description: "Emit the response as structured data.",
+              parameters: jsonSchema,
             },
           },
         ],

@@ -4,6 +4,7 @@ import { getLlmAdapter } from "@/lib/llm";
 import { IMPORT_ANALYSIS_SYSTEM_PROMPT, buildImportAnalysisPrompt } from "@/lib/llm/prompt";
 import { extractAndParseJson } from "@/lib/sop/parseJson";
 import { validateAndReconcile } from "@/lib/sop/reconcile";
+import { sopJsonSchema } from "@/lib/llm/schema";
 import { LlmAdapterError, LlmConfigError } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const adapter = getLlmAdapter();
-    const raw = await adapter.generate(IMPORT_ANALYSIS_SYSTEM_PROMPT, buildImportAnalysisPrompt(document));
+    const raw = await adapter.generate(IMPORT_ANALYSIS_SYSTEM_PROMPT, buildImportAnalysisPrompt(document), sopJsonSchema);
     const parsed = extractAndParseJson(raw);
     const sop = validateAndReconcile(parsed);
     return NextResponse.json({ sop });

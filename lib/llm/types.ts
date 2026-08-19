@@ -6,7 +6,16 @@
  */
 export interface LlmAdapter {
   readonly name: string;
-  generate(systemPrompt: string, userPrompt: string): Promise<string>;
+  /**
+   * `jsonSchema` constrains the response shape via each provider's own
+   * structured-output mechanism (OpenAI function-calling parameters,
+   * Gemini responseSchema, a schema hint embedded in Ollama's prompt) — it
+   * used to be hardcoded per-adapter to the single-SOP shape, which would
+   * have silently forced every response (including a list-of-ideas
+   * response) into that shape regardless of what the prompt actually asked
+   * for.
+   */
+  generate(systemPrompt: string, userPrompt: string, jsonSchema: object): Promise<string>;
 }
 
 export class LlmAdapterError extends Error {
