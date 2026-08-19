@@ -9,9 +9,10 @@ interface VariableFormProps {
   customKeys: Set<string>;
   onChange: (key: string, value: string | number | boolean) => void;
   onRemove: (key: string) => void;
+  onHoverField?: (key: string | null) => void;
 }
 
-export default function VariableForm({ variables, values, customKeys, onChange, onRemove }: VariableFormProps) {
+export default function VariableForm({ variables, values, customKeys, onChange, onRemove, onHoverField }: VariableFormProps) {
   if (variables.length === 0) {
     return <p className="text-sm text-slate-500">No variables yet. Generate an SOP to populate this form.</p>;
   }
@@ -19,7 +20,12 @@ export default function VariableForm({ variables, values, customKeys, onChange, 
   return (
     <div className="space-y-4">
       {variables.map((variable) => (
-        <div key={variable.key} className="group">
+        <div
+          key={variable.key}
+          className="group"
+          onMouseEnter={() => onHoverField?.(variable.key)}
+          onMouseLeave={() => onHoverField?.(null)}
+        >
           <div className="flex items-center justify-between gap-2 mb-1">
             <label htmlFor={`var-${variable.key}`} className="text-sm font-medium text-slate-200">
               {variable.label}

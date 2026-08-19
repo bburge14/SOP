@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Code2, Eye } from "lucide-react";
-import type { VariableValues } from "@/types/sop";
-import { renderTemplate } from "@/lib/sop/template";
+import type { SopVariable, VariableValues } from "@/types/sop";
+import { remarkSubstituteVariables } from "@/lib/sop/remarkSubstituteVariables";
 import MarkdownToolbar from "@/components/MarkdownToolbar";
 
 export type PreviewMode = "preview" | "source";
@@ -13,14 +13,58 @@ export type PreviewMode = "preview" | "source";
 interface MarkdownPreviewProps {
   template: string;
   values: VariableValues;
+  variables: SopVariable[];
   onTemplateChange: (next: string) => void;
   mode: PreviewMode;
   onModeChange: (mode: PreviewMode) => void;
+  hoveredKey: string | null;
+  hoverHighlightEnabled: boolean;
 }
 
-export default function MarkdownPreview({ template, values, onTemplateChange, mode, onModeChange }: MarkdownPreviewProps) {
-  const rendered = renderTemplate(template, values);
+export default function MarkdownPreview({
+  template,
+  values,
+  variables,
+  onTemplateChange,
+  mode,
+  onModeChange,
+  hoveredKey,
+  hoverHighlightEnabled,
+}: MarkdownPreviewProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Hover a field in the left pane -> highlight (and scroll to) its
+  // occurrence(s) in the rendered preview. The opposite direction (hover
+  // text in the preview -> see which field it is) needs no JS at all: the
+  // spans remark-substitute-variables produces carry their own `title`
+  // tooltip and a plain CSS :hover highlight (app/globals.css).
+  useEffect(() => {
+    if (!hoveredKey || !hoverHighlightEnabled || mode !== "preview") return;
+    const container = previewRef.current;
+    if (!container) return;
+    const selector = `[data-sop-var="${CSS.escape(hoveredKey)}"]`;
+    const matches = container.querySelectorAll<HTMLElement>(selector);
+    matches.forEach((el) => el.classList.add("sop-var-highlight"));
+
+    // Deliberately not Element.scrollIntoView(): per spec it may scroll
+    // every scrollable ancestor, not just the nearest one — reproduced
+    // live, it nudged the whole page (including the left field-list pane)
+    // by tens of pixels while the mouse stayed put, so a DIFFERENT field
+    // row ended up under the still-hovering cursor mid-hover, firing a
+    // genuine mouseleave/mouseenter that jumped the highlight to the wrong
+    // field. Scrolling only this container's own scrollTop can't cascade
+    // to any ancestor, so it can't cause that.
+    const first = matches[0];
+    if (first) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = first.getBoundingClientRect();
+      const delta = targetRect.top - containerRect.top - container.clientHeight / 2 + targetRect.height / 2;
+      container.scrollBy({ top: delta, behavior: "smooth" });
+    }
+
+    return () => matches.forEach((el) => el.classList.remove("sop-var-highlight"));
+  }, [hoveredKey, hoverHighlightEnabled, mode]);
 
   return (
     <div className="flex flex-col h-full">
@@ -35,9 +79,11 @@ export default function MarkdownPreview({ template, values, onTemplateChange, mo
 
       <div className="flex-1 min-h-0 bg-panel border border-border rounded-lg overflow-hidden flex flex-col">
         {mode === "preview" ? (
-          <div id="print-target" className="h-full overflow-y-auto p-6">
+          <div id="print-target" ref={previewRef} className="h-full overflow-y-auto p-6">
             <div className="sop-prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{rendered}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkSubstituteVariables(values, variables)]}>
+                {template}
+              </ReactMarkdown>
             </div>
           </div>
         ) : (

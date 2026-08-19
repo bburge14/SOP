@@ -67,6 +67,21 @@ body {
   @apply bg-amber-500/20 text-amber-300 rounded px-1;
 }
 
+/* Hover-to-locate: every substituted {{key}} is wrapped in a span carrying
+   data-sop-var + a title tooltip (see lib/sop/remarkSubstituteVariables.ts).
+   :hover here is the "hover text in the SOP -> see which field" direction;
+   .sop-var-highlight is JS-toggled for the opposite direction (hover a
+   field in the left pane -> highlight + scroll to it in the preview). */
+.sop-var-value {
+  @apply rounded transition-colors cursor-help;
+}
+.sop-var-value:hover {
+  @apply bg-indigo-500/20;
+}
+.sop-var-highlight {
+  @apply bg-indigo-500/40 ring-1 ring-indigo-400/70;
+}
+
 @media print {
   /* Without this, print/PDF output was the app's dark theme verbatim —
      white text on a black page. Reproduced live via a print-media
@@ -145,5 +160,14 @@ body {
   #print-target .unbound-placeholder {
     background: #fef3c7;
     color: #92400e;
+  }
+  /* Belt-and-suspenders: a hover/programmatic highlight can't realistically
+     be "live" during an actual print snapshot, but nothing about this
+     stylesheet should risk a stray highlight box ending up in an exported
+     document either. */
+  #print-target .sop-var-highlight,
+  #print-target .sop-var-value:hover {
+    background: transparent !important;
+    box-shadow: none !important;
   }
 }

@@ -9,6 +9,7 @@ import ActionBar from "@/components/ActionBar";
 import UpdatePanel from "@/components/UpdatePanel";
 import DesktopUpdatePanel from "@/components/DesktopUpdatePanel";
 import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
+import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/PreferencesPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
@@ -45,6 +46,13 @@ export default function SopWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // Defaults true (matches readHoverHighlightEnabled's own default) and only
+  // reads the real localStorage value in an effect — same "don't touch
+  // window during the initial render" caution DesktopSettingsPanel already
+  // uses for window.electronAPI, to avoid an SSR/client hydration mismatch.
+  const [hoverHighlightEnabled, setHoverHighlightEnabled] = useState(true);
+  useEffect(() => setHoverHighlightEnabled(readHoverHighlightEnabled()), []);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
   // gate only applies to the desktop app, which has no .env.local a
@@ -396,6 +404,7 @@ export default function SopWorkspace() {
         </div>
         <UpdatePanel />
         <DesktopUpdatePanel />
+        <PreferencesPanel hoverHighlightEnabled={hoverHighlightEnabled} onHoverHighlightChange={setHoverHighlightEnabled} />
         <DesktopSettingsPanel />
       </header>
 
@@ -466,6 +475,7 @@ export default function SopWorkspace() {
                 customKeys={customKeys}
                 onChange={handleVariableChange}
                 onRemove={handleRemoveField}
+                onHoverField={hoverHighlightEnabled ? setHoveredKey : undefined}
               />
             </div>
           </div>
@@ -489,9 +499,12 @@ export default function SopWorkspace() {
             <MarkdownPreview
               template={template}
               values={values}
+              variables={variables}
               onTemplateChange={handleTemplateChange}
               mode={previewMode}
               onModeChange={setPreviewMode}
+              hoveredKey={hoveredKey}
+              hoverHighlightEnabled={hoverHighlightEnabled}
             />
           </div>
         </div>
