@@ -27,8 +27,13 @@ export type LlmProvider = "openai" | "gemini" | "ollama";
  * non-public — tool/program instead of guessing at its behavior. Sent to
  * the AI provider alongside the topic; see the privacy notice in
  * TopicInput.tsx and README.md's "Privacy & data handling" section.
+ *
+ * `content` is already redacted (lib/sop/redactSecrets.ts) by the time it's
+ * stored here — `redactedCount` (when > 0) is just for showing the user
+ * that something was scrubbed, not a flag for further processing.
  */
 export interface ContextAttachment {
   name: string;
   content: string;
+  redactedCount?: number;
 }

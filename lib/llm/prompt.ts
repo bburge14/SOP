@@ -55,3 +55,26 @@ Rules:
 export function buildImportAnalysisPrompt(document: string): string {
   return `Here is the full text of an existing document to parameterize (do not alter its content beyond inserting {{variable_key}} placeholders):\n\n${document.trim()}`;
 }
+
+// Used by "Review & Improve" — unlike Scan with AI (which must preserve
+// wording exactly, since its only job is finding variables), this one is
+// explicitly allowed to rewrite/add content to fix real quality problems.
+// It's the "bring existing content up to generation's own quality bar"
+// pass, for SOPs a human wrote by hand, pasted in, or hand-edited after
+// generating. Reuses the same output schema as generation/import-analysis.
+export const REVIEW_IMPROVE_SYSTEM_PROMPT = `You are reviewing and improving an existing SOP that a human wrote, pasted in, or hand-edited — not authoring one from scratch. Bring it up to the same quality bar a freshly-generated SOP would meet, while preserving the author's actual steps, structure, and intent as much as possible.
+
+Rules:
+- Preserve the author's overall structure, step ordering, and the substance of what they wrote. You may rewrite, tighten, restructure, or expand specific problem areas to fix the issues below — you are not required to preserve wording verbatim the way a pure parameterization pass would be.
+- Identify and parameterize genuinely site/user-specific values with {{variable_key}} placeholders — same standard as generation: only real varying values (hostnames, IPs, usernames, ports, VLAN IDs, credentials, dates, model numbers), snake_case keys, every {{key}} declared in variables[] and vice versa.
+- Fix variable coupling: if a value is (or becomes, once you parameterize it) a variable, any other content that depends on it must stay correct for ANY value of that variable — never leave something hardcoded to match only one default.
+- Fix variable redundancy: if the document expresses one underlying value across multiple separate variables the user would have to keep in sync by hand, merge them into a single canonical variable used everywhere that value is needed.
+- Fix rollback/cleanup pseudocode: replace bracketed placeholders or pseudo-syntax with real, executable commands. If a step needs a value only knowable at execution time, give the actual lookup command followed by the actual command that uses its result.
+- Add a missing pre-flight safety checkpoint (prerequisites or step 1) if the SOP is destructive, hard to reverse, or broad in effect and doesn't already have one — e.g. confirm a snapshot/backup exists and is restorable, or verify break-glass access.
+- If the document is missing a section a real SOP needs (prerequisites, verification, rollback), add one — grounded in what the document already describes, not invented from nothing you have any basis for.
+- variables[].default should be the original/current value found in the document at that spot where one exists.
+- Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.`;
+
+export function buildReviewImprovePrompt(document: string): string {
+  return `Here is the full text of an existing SOP to review and improve:\n\n${document.trim()}`;
+}

@@ -107,6 +107,14 @@ export default function TopicInput({
             >
               <FileText className="size-3.5 text-slate-500" />
               {file.name}
+              {!!file.redactedCount && (
+                <span
+                  className="text-amber-400"
+                  title={`${file.redactedCount} value(s) that looked like API keys/passwords/tokens were redacted before this was attached`}
+                >
+                  ({file.redactedCount} redacted)
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => onRemoveContextFile(file.name)}
@@ -125,8 +133,10 @@ export default function TopicInput({
         <span>
           Don&apos;t include proprietary, confidential, or personal information in your topic — it&apos;s sent to an
           external AI service to generate content. Attached reference files (README/source/config for your own
-          internal or non-public tools) are sent in full the same way — only attach what you&apos;re comfortable
-          sharing with your AI provider. Nothing you generate is saved by this app; export what you want to keep.
+          internal or non-public tools) are sent in full the same way — values that look like API keys, passwords,
+          or tokens are automatically redacted before attaching, but that&apos;s best-effort, not a guarantee, so
+          only attach what you&apos;re comfortable sharing with your AI provider. Nothing you generate is saved by
+          this app; export what you want to keep.
         </span>
       </p>
     </div>

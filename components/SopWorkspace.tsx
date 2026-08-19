@@ -16,6 +16,7 @@ import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
 import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
 import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
+import { redactSecrets } from "@/lib/sop/redactSecrets";
 import type { ContextAttachment, SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
@@ -47,6 +48,7 @@ export default function SopWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [improving, setImproving] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // Defaults true (matches readHoverHighlightEnabled's own default) and only
   // reads the real localStorage value in an effect — same "don't touch
@@ -79,10 +81,13 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
+      // contextFiles are already redacted at attach time (handleAddContextFiles) —
+      // only the topic still needs it here, in case a secret got pasted into it directly.
+      const { text: redactedTopic } = redactSecrets(newTopic);
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: newTopic, context: contextFiles }),
+        body: JSON.stringify({ topic: redactedTopic, context: contextFiles }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -216,10 +221,16 @@ export default function SopWorkspace() {
     const reads = await Promise.all(
       toProcess.map(async (file) => {
         try {
-          const content = await readFileAsText(file);
-          return { file, content, error: content.trim() ? null : `"${file.name}" is empty.` };
+          const rawContent = await readFileAsText(file);
+          if (!rawContent.trim()) return { file, content: null as string | null, redactedCount: 0, error: `"${file.name}" is empty.` };
+          // Scrub anything that looks like a secret (API key, password,
+          // private key, etc.) before this content ever enters state that
+          // could be sent to the AI — attached files exist specifically to
+          // be sent, so this has to happen at attach time, not send time.
+          const { text: content, count: redactedCount } = redactSecrets(rawContent);
+          return { file, content, redactedCount, error: null as string | null };
         } catch {
-          return { file, content: null as string | null, error: `Could not read "${file.name}".` };
+          return { file, content: null as string | null, redactedCount: 0, error: `Could not read "${file.name}".` };
         }
       })
     );
@@ -229,13 +240,13 @@ export default function SopWorkspace() {
     let runningTotal = contextFiles.reduce((sum, f) => sum + f.content.length, 0);
     const accepted: ContextAttachment[] = [];
     let droppedForSize = 0;
-    for (const { file, content, error } of reads) {
+    for (const { file, content, redactedCount, error } of reads) {
       if (error || content === null) continue;
       if (runningTotal + content.length > MAX_CONTEXT_TOTAL_CHARS) {
         droppedForSize++;
         continue;
       }
-      accepted.push({ name: file.name, content });
+      accepted.push({ name: file.name, content, redactedCount });
       runningTotal += content.length;
     }
 
@@ -266,7 +277,8 @@ export default function SopWorkspace() {
     const confirmed = window.confirm(
       "This sends the full document (not just a topic) to your configured AI provider so it can find and parameterize " +
         "site-specific values. Unlike normal generation, the whole document leaves this machine for this one action. " +
-        "Don't do this with proprietary or confidential content. Continue?"
+        "Values that look like API keys/passwords/tokens are automatically redacted first, but that's best-effort — " +
+        "don't do this with proprietary or confidential content. Continue?"
     );
     if (!confirmed) return;
 
@@ -274,10 +286,11 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
       const res = await fetch("/api/analyze-import", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ document: renderTemplate(template, values) }),
+        body: JSON.stringify({ document: redactedDocument }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -307,6 +320,72 @@ export default function SopWorkspace() {
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  async function handleReviewAndImprove() {
+    if (!template.trim()) return;
+    const confirmed = window.confirm(
+      "This sends the full document (not just a topic) to your configured AI provider, which may rewrite or add to it " +
+        "to fix issues (missing safety checkpoints, hardcoded values that should be variables, non-executable rollback " +
+        "steps). Unlike normal generation, the whole document leaves this machine for this one action. Values that " +
+        "look like API keys/passwords/tokens are automatically redacted first, but that's best-effort — don't do " +
+        "this with proprietary or confidential content. Continue?"
+    );
+    if (!confirmed) return;
+
+    setImproving(true);
+    setError(null);
+    setErrorDetail(null);
+    try {
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
+      const res = await fetch("/api/review-improve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ document: redactedDocument }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to review document.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
+
+      const sop = data.sop as {
+        title: string;
+        category: string;
+        overview: string;
+        prerequisites: string[];
+        variables: SopVariable[];
+        template_markdown: string;
+      };
+
+      setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+      setVariables(sop.variables);
+      setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
+      setTemplate(sop.template_markdown);
+      setCustomKeys(new Set(sop.variables.map((v) => v.key)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error reviewing document.");
+    } finally {
+      setImproving(false);
+    }
+  }
+
+  function handleStartBlank() {
+    if (hasSop) {
+      const confirmed = window.confirm("Starting a blank SOP will discard your current field values and edits. Continue?");
+      if (!confirmed) return;
+    }
+    setTopic("");
+    setMeta({ title: "Untitled SOP", category: "Draft", overview: "", prerequisites: [] });
+    setVariables([]);
+    setValues({});
+    setTemplate("# Untitled SOP\n\n");
+    setCustomKeys(new Set());
+    setPreviewMode("source");
+    setError(null);
+    setErrorDetail(null);
+    setContextFiles([]);
   }
 
   function handleRegenerate() {
@@ -519,6 +598,13 @@ export default function SopWorkspace() {
               Describe a task, vendor procedure, or technology above — SOP Writer will draft a parameterized SOP you
               can fill in and export.
             </p>
+            <button
+              type="button"
+              onClick={handleStartBlank}
+              className="text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2 mt-2"
+            >
+              …or start with a blank document
+            </button>
           </div>
         </div>
       )}
@@ -562,7 +648,7 @@ export default function SopWorkspace() {
             <ActionBar
               onRegenerate={handleRegenerate}
               regenerating={loading}
-              disabled={loading || analyzing}
+              disabled={loading || analyzing || improving}
               onCopy={handleCopy}
               onExportMarkdown={handleExportMarkdown}
               onExportPdf={handleExportPdf}
@@ -573,6 +659,8 @@ export default function SopWorkspace() {
               onAddField={handleAddField}
               onAnalyzeWithAi={() => void handleAnalyzeWithAi()}
               analyzing={analyzing}
+              onReviewAndImprove={() => void handleReviewAndImprove()}
+              improving={improving}
             />
             <MarkdownPreview
               template={template}
