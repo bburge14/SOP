@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 
 const STORAGE_KEY = "sop-writer:hover-highlight-enabled";
 
@@ -26,6 +27,8 @@ interface PreferencesPanelProps {
  */
 export default function PreferencesPanel({ hoverHighlightEnabled, onHoverHighlightChange }: PreferencesPanelProps) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(containerRef, () => setOpen(false), open);
 
   function handleToggle(next: boolean) {
     onHoverHighlightChange(next);
@@ -33,7 +36,7 @@ export default function PreferencesPanel({ hoverHighlightEnabled, onHoverHighlig
   }
 
   return (
-    <div className="relative text-xs">
+    <div ref={containerRef} className="relative text-xs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

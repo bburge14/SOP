@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, GitBranch, Loader2, RefreshCw, Settings2 } from "lucide-react";
+import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 
 interface Status {
   isGitCheckout: boolean;
@@ -35,6 +36,8 @@ export default function UpdatePanel() {
   const [open, setOpen] = useState(false);
   const [showTokenField, setShowTokenField] = useState(false);
   const [token, setToken] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(containerRef, () => setOpen(false), open);
 
   useEffect(() => {
     setToken(window.localStorage.getItem(TOKEN_STORAGE_KEY) || "");
@@ -117,7 +120,7 @@ export default function UpdatePanel() {
   }
 
   return (
-    <div className="relative text-xs">
+    <div ref={containerRef} className="relative text-xs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

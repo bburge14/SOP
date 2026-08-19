@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Settings2 } from "lucide-react";
 import type { DesktopProvider, DesktopSettings } from "@/types/electron";
 import { PROVIDER_INFO } from "@/lib/providerInfo";
 import { DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL } from "@/lib/llm/modelOptions";
 import ModelSelect from "@/components/ModelSelect";
+import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 
 const PROVIDER_NEEDS_KEY: Record<DesktopProvider, boolean> = {
   openai: true,
@@ -26,6 +27,8 @@ interface DesktopSettingsPanelProps {
 export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPanelProps) {
   const [settings, setSettings] = useState<DesktopSettings | null>(null);
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(containerRef, () => setOpen(false), open);
   const [provider, setProvider] = useState<DesktopProvider>("gemini");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -89,7 +92,7 @@ export default function DesktopSettingsPanel({ onConfigured }: DesktopSettingsPa
   }
 
   return (
-    <div className="relative text-xs">
+    <div ref={containerRef} className="relative text-xs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

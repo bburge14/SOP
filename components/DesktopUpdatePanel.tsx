@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, Loader2, RefreshCw, Tag } from "lucide-react";
 import type { DesktopUpdateStatus } from "@/types/electron";
+import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 
 export default function DesktopUpdatePanel() {
   const [hasElectronAPI, setHasElectronAPI] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   const [status, setStatus] = useState<DesktopUpdateStatus | null>(null);
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(containerRef, () => setOpen(false), open);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -24,7 +27,7 @@ export default function DesktopUpdatePanel() {
   const state = status?.state;
 
   return (
-    <div className="relative text-xs">
+    <div ref={containerRef} className="relative text-xs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
