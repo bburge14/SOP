@@ -38,7 +38,8 @@ export const sopJsonSchema = {
     prerequisites: {
       type: "array",
       items: { type: "string" },
-      description: "Required access, tools, or physical hardware",
+      description:
+        "Required access, tools, or physical hardware. For destructive/hard-to-reverse/broad-impact procedures, include an explicit pre-flight safety checkpoint here (e.g. confirm a snapshot/backup completed, verify break-glass access) before anything disruptive happens.",
     },
     variables: {
       type: "array",
@@ -68,7 +69,7 @@ export const sopJsonSchema = {
     template_markdown: {
       type: "string",
       description:
-        "Full procedural SOP in Markdown. Use {{variable_key}} mustache placeholders for any environment-specific value. Include exact CLI commands, GUI paths, and verification steps.",
+        "Full procedural SOP in Markdown. Use {{variable_key}} mustache placeholders for any environment-specific value — one canonical variable per underlying value, never split across redundant variables, and never leave a dependent value (e.g. a service/protocol tied to a port) hardcoded once the value it depends on is parameterized. Include exact CLI commands, GUI paths, and verification steps. The rollback/cleanup section must use only real, executable commands — never bracketed pseudocode; if a step needs a runtime-assigned ID, include the actual lookup command followed by the actual command that uses its result.",
     },
   },
   required: ["title", "category", "overview", "prerequisites", "variables", "template_markdown"],
