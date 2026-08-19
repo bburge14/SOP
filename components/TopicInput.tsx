@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { FilePlus2, FileText, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
 import type { ContextAttachment } from "@/types/sop";
 
@@ -28,6 +28,16 @@ export default function TopicInput({
   const [topic, setTopic] = useState(initialValue);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextInputRef = useRef<HTMLInputElement>(null);
+
+  // `initialValue` is only consumed by useState on the very first render —
+  // without this, the box silently kept showing "" after Import (which sets
+  // the parent's topic from the file's derived title) or a Library load,
+  // even though the underlying topic state was actually correct (so
+  // Regenerate still worked; only the visible text was stale). Reproduced
+  // live: imported a file and the topic bar stayed blank immediately
+  // afterward. Only resyncs when `initialValue` itself changes, so it
+  // doesn't fight with the user's own typing (which never touches that prop).
+  useEffect(() => setTopic(initialValue), [initialValue]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
