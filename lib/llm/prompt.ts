@@ -1,3 +1,5 @@
+import type { ContextAttachment } from "@/types/sop";
+
 export const SOP_SYSTEM_PROMPT = `You are an expert technical writer and operations engineer specializing in creating comprehensive, standard operating procedures (SOPs).
 
 Given a task, technology, or procedure, produce a standardized SOP template containing parameterized variables for site-specific or user-specific details.
@@ -17,10 +19,18 @@ Variable coupling and redundancy — a common failure mode, get this right:
 
 Rollback/cleanup steps must be real, executable commands — never pseudo-syntax or bracketed placeholders like "delete [policy_id_assigned_to_{{policy_name}}]". If a rollback step needs a value only knowable at execution time (an ID assigned when something was created, a generated resource name, etc.), give the actual command to look it up, then the actual command to act on that result — e.g. "Run \`get firewall policy | grep {{policy_name}}\` to find the assigned policy ID, then \`delete firewall policy <id>\` using the ID returned." Every command in the rollback section must be something the operator could literally copy and run as-is.
 
-For any step that is destructive, hard to reverse, or broad in effect (partition/disk resizing, tenant-wide or broad access/firewall policy changes, deleting or replacing a resource, anything that could cause an outage), prerequisites or step 1 must include an explicit safety checkpoint completed BEFORE the disruptive action — e.g. confirm a hypervisor/VM snapshot exists and finished successfully, confirm a recent verified backup exists and is restorable, or verify break-glass/out-of-band access works. Routine, low-risk, easily-reversible procedures don't need this.`;
+For any step that is destructive, hard to reverse, or broad in effect (partition/disk resizing, tenant-wide or broad access/firewall policy changes, deleting or replacing a resource, anything that could cause an outage), prerequisites or step 1 must include an explicit safety checkpoint completed BEFORE the disruptive action — e.g. confirm a hypervisor/VM snapshot exists and finished successfully, confirm a recent verified backup exists and is restorable, or verify break-glass/out-of-band access works. Routine, low-risk, easily-reversible procedures don't need this.
 
-export function buildUserPrompt(topic: string): string {
-  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}`;
+If the user prompt includes attached reference material about a specific tool, program, or environment (delimited below as "Reference material"), treat it as the authoritative source of truth for that tool's actual behavior, commands, flags, config syntax, and options — this is often an internal or non-public program you have no other knowledge of. Prefer facts from the reference material over generic assumptions or knowledge of similar-sounding tools, and do not invent commands, flags, or behavior that the material doesn't support or that contradicts it. Where the material doesn't cover something the SOP needs, fall back to clearly-generic best practice rather than presenting a guess as if it were confirmed by the material.`;
+
+export function buildUserPrompt(topic: string, context: ContextAttachment[] = []): string {
+  const contextBlock =
+    context.length > 0
+      ? `\n\n---\nReference material for this task — ground truth about the specific tool/program/environment involved (see system instructions on how to use this):\n\n` +
+        context.map((f) => `### ${f.name}\n${f.content.trim()}`).join("\n\n") +
+        `\n---`
+      : "";
+  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${contextBlock}`;
 }
 
 // Used by the optional "Scan with AI" action on an imported document — the

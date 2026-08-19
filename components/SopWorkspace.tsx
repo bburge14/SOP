@@ -13,9 +13,10 @@ import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/Prefer
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
-import { docxToMarkdown } from "@/lib/sop/docxToMarkdown";
+import { readFileAsText } from "@/lib/sop/readFileAsText";
 import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
-import type { SopVariable, VariableValues } from "@/types/sop";
+import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
+import type { ContextAttachment, SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
 
@@ -54,6 +55,7 @@ export default function SopWorkspace() {
   const [hoverHighlightEnabled, setHoverHighlightEnabled] = useState(true);
   useEffect(() => setHoverHighlightEnabled(readHoverHighlightEnabled()), []);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [contextFiles, setContextFiles] = useState<ContextAttachment[]>([]);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
   // gate only applies to the desktop app, which has no .env.local a
   // terminal could set up, so first-run setup has to happen in the UI.
@@ -80,7 +82,7 @@ export default function SopWorkspace() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: newTopic }),
+        body: JSON.stringify({ topic: newTopic, context: contextFiles }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -127,7 +129,7 @@ export default function SopWorkspace() {
 
     let text: string;
     try {
-      text = isDocx ? await docxToMarkdown(file) : await file.text();
+      text = await readFileAsText(file);
     } catch {
       setError(isDocx ? "Could not read that .docx file. Is it a valid Word document?" : "Could not read that file.");
       return;
@@ -184,6 +186,79 @@ export default function SopWorkspace() {
     setPreviewMode("source");
     setError(null);
     setErrorDetail(null);
+    // Import is an unrelated flow (editing existing content, no AI call) —
+    // reference files attached for a previous generation attempt wouldn't
+    // meaningfully apply to a freshly-imported, unrelated document.
+    setContextFiles([]);
+  }
+
+  // Takes the whole batch from one file-picker selection at once, rather
+  // than being called per-file in a loop — a per-file version that checked
+  // `contextFiles.length`/reduce against component state read the same
+  // stale (pre-update) value on every call in the batch, since none of the
+  // setContextFiles calls from earlier iterations had actually applied yet
+  // by the time the next iteration's checks ran. Reproduced live by
+  // attaching 10 files in one picker action with 1 already attached: the
+  // cap check passed on all 10 (each saw length=1), landing 11 files
+  // instead of being capped at 10. Batching reads `contextFiles` exactly
+  // once, so there's nothing to go stale.
+  async function handleAddContextFiles(files: File[]) {
+    if (files.length === 0) return;
+
+    const availableSlots = MAX_CONTEXT_FILES - contextFiles.length;
+    if (availableSlots <= 0) {
+      setError(`You can attach at most ${MAX_CONTEXT_FILES} reference files.`);
+      return;
+    }
+    const toProcess = files.slice(0, availableSlots);
+    const droppedForCount = files.length - toProcess.length;
+
+    const reads = await Promise.all(
+      toProcess.map(async (file) => {
+        try {
+          const content = await readFileAsText(file);
+          return { file, content, error: content.trim() ? null : `"${file.name}" is empty.` };
+        } catch {
+          return { file, content: null as string | null, error: `Could not read "${file.name}".` };
+        }
+      })
+    );
+
+    const firstReadError = reads.find((r) => r.error)?.error ?? null;
+
+    let runningTotal = contextFiles.reduce((sum, f) => sum + f.content.length, 0);
+    const accepted: ContextAttachment[] = [];
+    let droppedForSize = 0;
+    for (const { file, content, error } of reads) {
+      if (error || content === null) continue;
+      if (runningTotal + content.length > MAX_CONTEXT_TOTAL_CHARS) {
+        droppedForSize++;
+        continue;
+      }
+      accepted.push({ name: file.name, content });
+      runningTotal += content.length;
+    }
+
+    if (accepted.length > 0) {
+      setContextFiles((prev) => [...prev, ...accepted]);
+    }
+
+    if (firstReadError) {
+      setError(firstReadError);
+    } else if (droppedForSize > 0) {
+      setError(
+        `Attached reference files total ${MAX_CONTEXT_TOTAL_CHARS.toLocaleString()} characters or fewer — ${droppedForSize} file(s) weren't added.`
+      );
+    } else if (droppedForCount > 0) {
+      setError(`You can attach at most ${MAX_CONTEXT_FILES} reference files — ${droppedForCount} file(s) weren't added.`);
+    } else {
+      setError(null);
+      setErrorDetail(null);
+    }
+  }
+
+  function handleRemoveContextFile(name: string) {
+    setContextFiles((prev) => prev.filter((f) => f.name !== name));
   }
 
   async function handleAnalyzeWithAi() {
@@ -413,6 +488,9 @@ export default function SopWorkspace() {
         onImport={(f) => void handleImport(f)}
         loading={loading}
         initialValue={topic}
+        contextFiles={contextFiles}
+        onAddContextFiles={(files) => void handleAddContextFiles(files)}
+        onRemoveContextFile={handleRemoveContextFile}
       />
 
       {error && (

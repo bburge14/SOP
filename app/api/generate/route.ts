@@ -5,14 +5,17 @@ import { SOP_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/llm/prompt";
 import { extractAndParseJson } from "@/lib/sop/parseJson";
 import { validateAndReconcile } from "@/lib/sop/reconcile";
 import { LlmAdapterError, LlmConfigError } from "@/lib/llm/types";
+import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
+import type { ContextAttachment } from "@/types/sop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   let topic: unknown;
+  let context: unknown;
   try {
-    ({ topic } = await req.json());
+    ({ topic, context } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -27,9 +30,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "`topic` must be 500 characters or fewer." }, { status: 400 });
   }
 
+  const contextAttachments = validateContext(context);
+  if (contextAttachments instanceof NextResponse) return contextAttachments;
+
   try {
     const adapter = getLlmAdapter();
-    const raw = await adapter.generate(SOP_SYSTEM_PROMPT, buildUserPrompt(topic));
+    const raw = await adapter.generate(SOP_SYSTEM_PROMPT, buildUserPrompt(topic, contextAttachments));
     const parsed = extractAndParseJson(raw);
     const sop = validateAndReconcile(parsed);
     return NextResponse.json({ sop });
@@ -42,6 +48,45 @@ export async function POST(req: NextRequest) {
     const { message, detail } = describeError(err);
     return NextResponse.json({ error: message, detail }, { status: statusFor(err) });
   }
+}
+
+/** Returns the validated attachments, or a ready-to-return 400 response on bad input. */
+function validateContext(context: unknown): ContextAttachment[] | NextResponse {
+  if (context === undefined || context === null) return [];
+
+  if (!Array.isArray(context)) {
+    return NextResponse.json({ error: "`context` must be an array of { name, content } files." }, { status: 400 });
+  }
+  if (context.length > MAX_CONTEXT_FILES) {
+    return NextResponse.json(
+      { error: `At most ${MAX_CONTEXT_FILES} reference files can be attached.` },
+      { status: 400 }
+    );
+  }
+
+  let total = 0;
+  for (const item of context) {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      typeof (item as Record<string, unknown>).name !== "string" ||
+      typeof (item as Record<string, unknown>).content !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Each context file must be an object with a string `name` and `content`." },
+        { status: 400 }
+      );
+    }
+    total += (item as ContextAttachment).content.length;
+  }
+  if (total > MAX_CONTEXT_TOTAL_CHARS) {
+    return NextResponse.json(
+      { error: `Attached reference files total ${MAX_CONTEXT_TOTAL_CHARS.toLocaleString()} characters or fewer.` },
+      { status: 400 }
+    );
+  }
+
+  return context as ContextAttachment[];
 }
 
 function statusFor(err: unknown): number {
