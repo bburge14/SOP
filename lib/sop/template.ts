@@ -33,3 +33,18 @@ export function renderTemplate(template: string, values: VariableValues, variabl
     return String(value);
   });
 }
+
+/**
+ * Un-parameterizes one {{key}}: replaces every occurrence in the template
+ * with a literal value (or removes it entirely if empty), for when a field
+ * shouldn't have been a variable at all — e.g. a value only discovered
+ * live during the procedure (a serial number read off a device) that the
+ * generation prompt now tries to avoid parameterizing, but won't always
+ * get right. `key` is safe to embed directly: variable keys are already
+ * constrained to plain identifier characters (no regex metacharacters) by
+ * sopZodSchema/AddFieldDialog before they ever reach this function.
+ */
+export function unparameterize(template: string, key: string, literal: string): string {
+  const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
+  return template.replace(re, literal);
+}

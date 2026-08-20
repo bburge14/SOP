@@ -6,13 +6,12 @@ import type { SopVariable, VariableValues } from "@/types/sop";
 interface VariableFormProps {
   variables: SopVariable[];
   values: VariableValues;
-  customKeys: Set<string>;
   onChange: (key: string, value: string | number | boolean) => void;
   onRemove: (key: string) => void;
   onHoverField?: (key: string | null) => void;
 }
 
-export default function VariableForm({ variables, values, customKeys, onChange, onRemove, onHoverField }: VariableFormProps) {
+export default function VariableForm({ variables, values, onChange, onRemove, onHoverField }: VariableFormProps) {
   if (variables.length === 0) {
     return <p className="text-sm text-slate-500">No variables yet. Generate an SOP to populate this form.</p>;
   }
@@ -32,16 +31,15 @@ export default function VariableForm({ variables, values, customKeys, onChange, 
             </label>
             <div className="flex items-center gap-2">
               <code className="text-[11px] text-slate-500">{`{{${variable.key}}}`}</code>
-              {customKeys.has(variable.key) && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(variable.key)}
-                  className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label={`Remove ${variable.key}`}
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => onRemove(variable.key)}
+                className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={`Remove ${variable.key}`}
+                title="Remove this field — replaces it in the SOP with its current value (or deletes it if empty)"
+              >
+                <X className="size-3.5" />
+              </button>
             </div>
           </div>
 

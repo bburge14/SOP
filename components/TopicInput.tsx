@@ -1,19 +1,10 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import {
-  FilePlus2,
-  FileText,
-  Lightbulb,
-  Loader2,
-  Paperclip,
-  ShieldAlert,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react";
+import { FilePlus2, FileText, Lightbulb, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
 import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
-import type { ContextAttachment, SopIdea } from "@/types/sop";
+import CategoryProfilePanel from "@/components/CategoryProfilePanel";
+import type { CategoryProfileDefault, ContextAttachment, SopIdea } from "@/types/sop";
 
 interface TopicInputProps {
   onSubmit: (topic: string) => void;
@@ -28,6 +19,13 @@ interface TopicInputProps {
   suggestingIdeas: boolean;
   suggestedIdeas: SopIdea[] | null;
   onClearSuggestedIdeas: () => void;
+  category: string;
+  onCategoryChange: (category: string) => void;
+  categorySuggestions: string[];
+  /** Set right after Save to Library to auto-open the profile panel with proposed defaults; cleared once shown. */
+  reviewCandidates: CategoryProfileDefault[] | null;
+  onReviewCandidatesHandled: () => void;
+  onCategoryProfileSaved: () => void;
 }
 
 export default function TopicInput({
@@ -43,6 +41,12 @@ export default function TopicInput({
   suggestingIdeas,
   suggestedIdeas,
   onClearSuggestedIdeas,
+  category,
+  onCategoryChange,
+  categorySuggestions,
+  reviewCandidates,
+  onReviewCandidatesHandled,
+  onCategoryProfileSaved,
 }: TopicInputProps) {
   const [topic, setTopic] = useState(initialValue);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +96,28 @@ export default function TopicInput({
           className="flex-1 bg-panel border border-border rounded-lg px-4 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
           disabled={loading}
         />
+        <div className="flex gap-2">
+          <input
+            list="category-suggestions"
+            value={category}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            placeholder="Category (optional)"
+            title="Tell the AI what category this SOP belongs to — if you've saved a profile for it, its context and remembered defaults are used automatically"
+            className="w-40 bg-panel border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+            disabled={loading}
+          />
+          <datalist id="category-suggestions">
+            {categorySuggestions.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <CategoryProfilePanel
+            category={category.trim()}
+            reviewCandidates={reviewCandidates}
+            onReviewCandidatesHandled={onReviewCandidatesHandled}
+            onSaved={onCategoryProfileSaved}
+          />
+        </div>
         <input
           ref={fileInputRef}
           type="file"

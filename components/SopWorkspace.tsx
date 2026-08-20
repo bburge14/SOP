@@ -12,14 +12,15 @@ import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/PreferencesPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import LibraryPanel from "@/components/LibraryPanel";
-import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
+import { extractPlaceholders, renderTemplate, unparameterize } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
 import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
 import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLimits";
 import { redactSecrets } from "@/lib/sop/redactSecrets";
 import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
-import type { ContextAttachment, SavedSop, SopIdea, SopVariable, VariableValues } from "@/types/sop";
+import { getCategoryProfile, listCategoryProfiles } from "@/lib/sop/categoryProfiles";
+import type { CategoryProfileDefault, ContextAttachment, SavedSop, SopIdea, SopVariable, VariableValues } from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
 
@@ -44,7 +45,6 @@ export default function SopWorkspace() {
   const [variables, setVariables] = useState<SopVariable[]>([]);
   const [values, setValues] = useState<VariableValues>({});
   const [template, setTemplate] = useState("");
-  const [customKeys, setCustomKeys] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState<PreviewMode>("preview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +77,16 @@ export default function SopWorkspace() {
   // gate only applies to the desktop app, which has no .env.local a
   // terminal could set up, so first-run setup has to happen in the UI.
   const [electronGate, setElectronGate] = useState<ElectronGate>("checking");
+  // The category the next Generate/Regenerate grounds itself with — kept in
+  // sync with meta.category (both the sidebar's editable field and every
+  // action that sets meta write here too) so a saved profile applies from
+  // the very first generation, not just after you've already got a document.
+  const [category, setCategory] = useState("");
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
+  // Field values you actually changed from the AI's default, proposed for
+  // saving into the category's profile right after Save to Library —
+  // reviewed/approved in CategoryProfilePanel, never written automatically.
+  const [reviewCandidates, setReviewCandidates] = useState<CategoryProfileDefault[] | null>(null);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -89,6 +99,14 @@ export default function SopWorkspace() {
     });
   }, []);
 
+  async function refreshCategoryProfiles() {
+    const profiles = await listCategoryProfiles();
+    setCategoryNames(profiles.map((p) => p.category));
+  }
+  useEffect(() => {
+    void refreshCategoryProfiles();
+  }, []);
+
   const hasSop = meta !== null;
 
   async function generate(newTopic: string) {
@@ -99,10 +117,16 @@ export default function SopWorkspace() {
       // contextFiles are already redacted at attach time (handleAddContextFiles) —
       // only the topic still needs it here, in case a secret got pasted into it directly.
       const { text: redactedTopic } = redactSecrets(newTopic);
+      const trimmedCategory = category.trim();
+      const profile = trimmedCategory ? await getCategoryProfile(trimmedCategory) : undefined;
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: redactedTopic, context: contextFiles }),
+        body: JSON.stringify({
+          topic: redactedTopic,
+          context: contextFiles,
+          categoryProfile: trimmedCategory ? { category: trimmedCategory, context: profile?.context ?? "" } : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,12 +147,19 @@ export default function SopWorkspace() {
         template_markdown: string;
       };
 
+      // Pre-fill anything this category's saved profile already has a
+      // remembered value for, so it doesn't need typing in again.
+      const defaultsByKey = new Map((profile?.defaults ?? []).map((d) => [d.key, d]));
+      const seededVariables = sop.variables.map((v) =>
+        defaultsByKey.has(v.key) ? { ...v, default: defaultsByKey.get(v.key)!.value } : v
+      );
+
       setTopic(newTopic);
       setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
-      setVariables(sop.variables);
-      setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
+      setCategory(sop.category);
+      setVariables(seededVariables);
+      setValues(Object.fromEntries(seededVariables.map((v) => [v.key, v.default])));
       setTemplate(sop.template_markdown);
-      setCustomKeys(new Set());
       setPreviewMode("preview");
       setLibraryId(null);
     } catch (err) {
@@ -198,12 +229,10 @@ export default function SopWorkspace() {
       overview: `Imported from ${file.name}.`,
       prerequisites: [],
     });
+    setCategory("Imported");
     setVariables(importedVariables);
     setValues(Object.fromEntries(importedVariables.map((v) => [v.key, v.default])));
     setTemplate(text);
-    // Treated as user-added/removable, same as AddFieldDialog fields — these
-    // weren't declared by a trusted AI generation step.
-    setCustomKeys(new Set(importedVariables.map((v) => v.key)));
     setPreviewMode("source");
     setError(null);
     setErrorDetail(null);
@@ -353,12 +382,10 @@ export default function SopWorkspace() {
       };
 
       setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+      setCategory(sop.category);
       setVariables(sop.variables);
       setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
       setTemplate(sop.template_markdown);
-      // Still part of the Import workflow (adjusting user-supplied content),
-      // not the trusted from-scratch Generate pipeline — kept removable.
-      setCustomKeys(new Set(sop.variables.map((v) => v.key)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error analyzing document.");
     } finally {
@@ -404,10 +431,10 @@ export default function SopWorkspace() {
       };
 
       setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+      setCategory(sop.category);
       setVariables(sop.variables);
       setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
       setTemplate(sop.template_markdown);
-      setCustomKeys(new Set(sop.variables.map((v) => v.key)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error reviewing document.");
     } finally {
@@ -422,10 +449,10 @@ export default function SopWorkspace() {
     }
     setTopic("");
     setMeta({ title: "Untitled SOP", category: "Draft", overview: "", prerequisites: [] });
+    setCategory("Draft");
     setVariables([]);
     setValues({});
     setTemplate("# Untitled SOP\n\n");
-    setCustomKeys(new Set());
     setPreviewMode("source");
     setError(null);
     setErrorDetail(null);
@@ -448,7 +475,6 @@ export default function SopWorkspace() {
         variables,
         values,
         template,
-        customKeys: Array.from(customKeys),
         topic,
         createdAt: libraryId ? "" : now, // overwritten below when updating an existing record
         updatedAt: now,
@@ -463,6 +489,21 @@ export default function SopWorkspace() {
       }
       await saveSopToLibrary(record);
       setLibraryId(id);
+
+      // Propose remembering any field you actually filled in or changed
+      // from the AI's default as a reusable default for this category —
+      // reviewed and approved in CategoryProfilePanel, nothing is written
+      // to the profile just from saving.
+      if (meta.category.trim()) {
+        const candidates: CategoryProfileDefault[] = variables
+          .filter((v) => {
+            const current = values[v.key];
+            if (current === undefined || current === null || current === "") return false;
+            return String(current) !== String(v.default);
+          })
+          .map((v) => ({ key: v.key, label: v.label, value: values[v.key]!, type: v.type }));
+        setReviewCandidates(candidates.length > 0 ? candidates : null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save to the library.");
     } finally {
@@ -477,10 +518,10 @@ export default function SopWorkspace() {
     }
     setTopic(sop.topic);
     setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+    setCategory(sop.category);
     setVariables(sop.variables);
     setValues(sop.values);
     setTemplate(sop.template);
-    setCustomKeys(new Set(sop.customKeys));
     setPreviewMode("preview");
     setError(null);
     setErrorDetail(null);
@@ -501,16 +542,21 @@ export default function SopWorkspace() {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Un-parameterizes the field: every {{key}} occurrence in the template is
+  // replaced with its current literal value (or removed entirely if the
+  // field was left empty), then the variable itself is dropped. For fields
+  // that never should have been variables in the first place — a value only
+  // discovered live during the procedure (a serial number read off a
+  // device), which the generation prompt now tries to avoid creating a
+  // field for but won't always get right — this is the manual escape hatch.
   function handleRemoveField(key: string) {
+    const raw = values[key];
+    const literal = raw === undefined || raw === null || raw === "" ? "" : String(raw);
+    setTemplate((prev) => unparameterize(prev, key, literal));
     setVariables((prev) => prev.filter((v) => v.key !== key));
     setValues((prev) => {
       const next = { ...prev };
       delete next[key];
-      return next;
-    });
-    setCustomKeys((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
       return next;
     });
   }
@@ -518,7 +564,6 @@ export default function SopWorkspace() {
   function handleAddField(variable: SopVariable) {
     setVariables((prev) => [...prev, variable]);
     setValues((prev) => ({ ...prev, [variable.key]: variable.default }));
-    setCustomKeys((prev) => new Set(prev).add(variable.key));
   }
 
   // Keeps the form in sync when the user hand-edits {{placeholders}} in the
@@ -687,6 +732,12 @@ export default function SopWorkspace() {
         suggestingIdeas={suggestingIdeas}
         suggestedIdeas={suggestedIdeas}
         onClearSuggestedIdeas={() => setSuggestedIdeas(null)}
+        category={category}
+        onCategoryChange={setCategory}
+        categorySuggestions={categoryNames}
+        reviewCandidates={reviewCandidates}
+        onReviewCandidatesHandled={() => setReviewCandidates(null)}
+        onCategoryProfileSaved={() => void refreshCategoryProfiles()}
       />
 
       {error && (
@@ -733,7 +784,10 @@ export default function SopWorkspace() {
               <div className="flex items-center justify-between gap-2 mb-2">
                 <input
                   value={meta.category}
-                  onChange={(e) => setMeta((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
+                  onChange={(e) => {
+                    setMeta((prev) => (prev ? { ...prev, category: e.target.value } : prev));
+                    setCategory(e.target.value);
+                  }}
                   title="Category — used to organize the library"
                   className="text-[11px] font-medium uppercase tracking-wide text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-32"
                 />
@@ -773,7 +827,6 @@ export default function SopWorkspace() {
               <VariableForm
                 variables={variables}
                 values={values}
-                customKeys={customKeys}
                 onChange={handleVariableChange}
                 onRemove={handleRemoveField}
                 onHoverField={hoverHighlightEnabled ? setHoveredKey : undefined}

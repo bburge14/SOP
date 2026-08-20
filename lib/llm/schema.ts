@@ -48,7 +48,8 @@ export const sopJsonSchema = {
         properties: {
           key: {
             type: "string",
-            description: "Exact variable name used in the template, snake_case, must match a {{key}} placeholder",
+            description:
+              "Exact variable name used in the template, snake_case, must match a {{key}} placeholder. Only for a value decided BEFORE running the procedure. Never declare a key for a value only discovered DURING the procedure — a serial number, asset tag, MAC address, a DHCP-assigned IP/gateway, an activation code generated on the spot. Those get no key at all; write them as plain prose in template_markdown instead.",
           },
           label: { type: "string", description: "Human-readable label" },
           description: { type: "string", description: "Brief explanation of what value goes here" },
@@ -60,7 +61,7 @@ export const sopJsonSchema = {
           default: {
             type: "string",
             description:
-              "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\") — but for a variable that uniquely identifies one specific device/instance with no genuine typical value (a serial number, asset tag, MAC address, license key, or specific per-site IP/hostname/device name), use \"\" instead of a fabricated-but-plausible example. A made-up identifier that looks real is worse than an honestly empty field.",
+              "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\") — but for a variable that's genuinely unique per deployment with no common convention (an org/network name, a license key, a fixed per-site hostname/IP decided in advance), use \"\" instead of a fabricated-but-plausible example. A made-up value that looks real is worse than an honestly empty field. Do not declare a variable at all for a value only discovered during the procedure itself (a serial number read off a device, a DHCP-assigned IP) — that belongs in template_markdown as plain prose, never as a {{variable}}.",
           },
           type: { type: "string", enum: ["string", "number", "boolean"] },
         },
@@ -70,7 +71,7 @@ export const sopJsonSchema = {
     template_markdown: {
       type: "string",
       description:
-        "Full procedural SOP in Markdown. Use {{variable_key}} mustache placeholders for any environment-specific value — one canonical variable per underlying value, never split across redundant variables, and never leave a dependent value (e.g. a service/protocol tied to a port) hardcoded once the value it depends on is parameterized. Include exact CLI commands, GUI paths, and verification steps. The rollback/cleanup section must use only real, executable commands — never bracketed pseudocode; if a step needs a runtime-assigned ID, include the actual lookup command followed by the actual command that uses its result. For any step built on a fact you cannot actually verify (an exact service name, config path, protocol availability, OS/platform, or other vendor-specific behavior invented rather than confirmed — common for internal or less-common tools), add a `> [!WARNING]` GitHub-style alert stating the assumption plainly, immediately after the step — do not present an unverified guess as settled fact.",
+        "Full procedural SOP in Markdown. Use {{variable_key}} mustache placeholders only for a value the operator decides BEFORE running the procedure (a target network name, a VLAN ID, a credential) — one canonical variable per underlying value, never split across redundant variables, and never leave a dependent value (e.g. a service/protocol tied to a port) hardcoded once the value it depends on is parameterized. Never use a {{variable}} for a value only discovered DURING the procedure (a serial number read off a device's label, a DHCP-assigned IP/gateway, an activation code generated on the spot) — write those as plain instructional prose describing exactly what to read or enter, with no placeholder at all. Include exact CLI commands, GUI paths, and verification steps. The rollback/cleanup section must use only real, executable commands — never bracketed pseudocode; if a step needs a runtime-assigned ID, include the actual lookup command followed by the actual command that uses its result. For any step built on a fact you cannot actually verify (an exact service name, config path, protocol availability, OS/platform, or other vendor-specific behavior invented rather than confirmed — common for internal or less-common tools), add a `> [!WARNING]` GitHub-style alert stating the assumption plainly, immediately after the step — do not present an unverified guess as settled fact.",
     },
   },
   required: ["title", "category", "overview", "prerequisites", "variables", "template_markdown"],

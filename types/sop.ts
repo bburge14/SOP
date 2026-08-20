@@ -55,7 +55,6 @@ export interface SavedSop {
   variables: SopVariable[];
   values: VariableValues;
   template: string;
-  customKeys: string[];
   topic: string;
   createdAt: string;
   updatedAt: string;
@@ -65,4 +64,32 @@ export interface SavedSop {
 export interface SopIdea {
   title: string;
   description: string;
+}
+
+/** A reusable {{key}} default remembered for a category, e.g. management_vlan -> "10". */
+export interface CategoryProfileDefault {
+  key: string;
+  label: string;
+  value: string | number | boolean;
+  type: VariableType;
+}
+
+/**
+ * Reusable, per-category setup — local-only (lib/sop/categoryProfiles.ts,
+ * IndexedDB, same "never synced or sent anywhere" guarantee as the
+ * library). Building an SOP tagged with a category that has a saved
+ * profile feeds `context` to the AI as grounding (same mechanism as
+ * Attach Reference) and pre-fills any variable whose key matches one in
+ * `defaults` — so the environment facts you've already told it about
+ * "User Reset" or "Meraki Networking" don't have to be re-typed or
+ * re-discovered by the AI every time. `categoryKey` is the normalized
+ * (trimmed, lowercased) matching key; `category` keeps the original
+ * casing for display.
+ */
+export interface CategoryProfile {
+  categoryKey: string;
+  category: string;
+  context: string;
+  defaults: CategoryProfileDefault[];
+  updatedAt: string;
 }

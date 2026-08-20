@@ -12,11 +12,14 @@ import type { ContextAttachment } from "@/types/sop";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const MAX_CATEGORY_CONTEXT_CHARS = 5000;
+
 export async function POST(req: NextRequest) {
   let topic: unknown;
   let context: unknown;
+  let categoryProfile: unknown;
   try {
-    ({ topic, context } = await req.json());
+    ({ topic, context, categoryProfile } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -34,9 +37,16 @@ export async function POST(req: NextRequest) {
   const contextAttachments = validateContext(context);
   if (contextAttachments instanceof NextResponse) return contextAttachments;
 
+  const validatedCategoryProfile = validateCategoryProfile(categoryProfile);
+  if (validatedCategoryProfile instanceof NextResponse) return validatedCategoryProfile;
+
   try {
     const adapter = getLlmAdapter();
-    const raw = await adapter.generate(SOP_SYSTEM_PROMPT, buildUserPrompt(topic, contextAttachments), sopJsonSchema);
+    const raw = await adapter.generate(
+      SOP_SYSTEM_PROMPT,
+      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile),
+      sopJsonSchema
+    );
     const parsed = extractAndParseJson(raw);
     const sop = validateAndReconcile(parsed);
     return NextResponse.json({ sop });
@@ -88,6 +98,31 @@ function validateContext(context: unknown): ContextAttachment[] | NextResponse {
   }
 
   return context as ContextAttachment[];
+}
+
+/** Returns the validated { category, context } pair, undefined if omitted, or a ready-to-return 400 response on bad input. */
+function validateCategoryProfile(categoryProfile: unknown): { category: string; context: string } | undefined | NextResponse {
+  if (categoryProfile === undefined || categoryProfile === null) return undefined;
+
+  if (
+    typeof categoryProfile !== "object" ||
+    typeof (categoryProfile as Record<string, unknown>).category !== "string" ||
+    typeof (categoryProfile as Record<string, unknown>).context !== "string"
+  ) {
+    return NextResponse.json(
+      { error: "`categoryProfile` must be an object with string `category` and `context`." },
+      { status: 400 }
+    );
+  }
+  const { category, context } = categoryProfile as { category: string; context: string };
+  if (!category.trim()) return undefined;
+  if (context.length > MAX_CATEGORY_CONTEXT_CHARS) {
+    return NextResponse.json(
+      { error: `Category profile context must be ${MAX_CATEGORY_CONTEXT_CHARS.toLocaleString()} characters or fewer.` },
+      { status: 400 }
+    );
+  }
+  return { category: category.trim(), context };
 }
 
 function statusFor(err: unknown): number {
