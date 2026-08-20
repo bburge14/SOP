@@ -63,6 +63,59 @@ body {
   @apply border-border my-4;
 }
 
+/* GitHub-style alert blockquotes (`> [!WARNING]` etc. — see
+   lib/sop/remarkGithubAlerts.ts) get swapped from <blockquote> to a styled
+   <div> so they read as a distinct callout, not another quiet note. [!WARNING]
+   is what SOP_SYSTEM_PROMPT/REVIEW_IMPROVE_SYSTEM_PROMPT are told to use for
+   a fact the AI is inferring rather than confirming (an exact service name,
+   a config path, whether SSH is even available) — the kind of thing that's
+   wrong to fold into a {{variable}} because the whole approach might not
+   apply, not just one value in it. */
+.sop-prose .sop-alert {
+  @apply border-l-4 rounded-r-md px-3 py-2 my-3;
+}
+.sop-prose .sop-alert p {
+  @apply my-0;
+}
+.sop-prose .sop-alert::before {
+  @apply block text-xs font-semibold uppercase tracking-wide mb-1;
+}
+.sop-prose .sop-alert-warning {
+  @apply bg-amber-500/10 border-amber-500;
+}
+.sop-prose .sop-alert-warning::before {
+  content: "⚠ Unverified — check before relying on this";
+  @apply text-amber-300;
+}
+.sop-prose .sop-alert-caution {
+  @apply bg-red-500/10 border-red-500;
+}
+.sop-prose .sop-alert-caution::before {
+  content: "⚠ Caution";
+  @apply text-red-300;
+}
+.sop-prose .sop-alert-important {
+  @apply bg-indigo-500/10 border-indigo-500;
+}
+.sop-prose .sop-alert-important::before {
+  content: "❗ Important";
+  @apply text-indigo-300;
+}
+.sop-prose .sop-alert-note {
+  @apply bg-blue-500/10 border-blue-500;
+}
+.sop-prose .sop-alert-note::before {
+  content: "ℹ Note";
+  @apply text-blue-300;
+}
+.sop-prose .sop-alert-tip {
+  @apply bg-emerald-500/10 border-emerald-500;
+}
+.sop-prose .sop-alert-tip::before {
+  content: "💡 Tip";
+  @apply text-emerald-300;
+}
+
 .unbound-placeholder {
   @apply bg-amber-500/20 text-amber-300 rounded px-1;
 }
@@ -160,6 +213,41 @@ body {
   #print-target .unbound-placeholder {
     background: #fef3c7;
     color: #92400e;
+  }
+  #print-target .sop-alert-warning {
+    background: #fffbeb;
+    border-color: #d97706;
+  }
+  #print-target .sop-alert-warning::before {
+    color: #92400e;
+  }
+  #print-target .sop-alert-caution {
+    background: #fef2f2;
+    border-color: #dc2626;
+  }
+  #print-target .sop-alert-caution::before {
+    color: #991b1b;
+  }
+  #print-target .sop-alert-important {
+    background: #eef2ff;
+    border-color: #4f46e5;
+  }
+  #print-target .sop-alert-important::before {
+    color: #3730a3;
+  }
+  #print-target .sop-alert-note {
+    background: #eff6ff;
+    border-color: #2563eb;
+  }
+  #print-target .sop-alert-note::before {
+    color: #1e40af;
+  }
+  #print-target .sop-alert-tip {
+    background: #ecfdf5;
+    border-color: #059669;
+  }
+  #print-target .sop-alert-tip::before {
+    color: #065f46;
   }
   /* Belt-and-suspenders: a hover/programmatic highlight can't realistically
      be "live" during an actual print snapshot, but nothing about this

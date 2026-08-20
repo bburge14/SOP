@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Code2, Eye } from "lucide-react";
 import type { SopVariable, VariableValues } from "@/types/sop";
 import { remarkSubstituteVariables } from "@/lib/sop/remarkSubstituteVariables";
+import { remarkGithubAlerts } from "@/lib/sop/remarkGithubAlerts";
 import MarkdownToolbar from "@/components/MarkdownToolbar";
 
 export type PreviewMode = "preview" | "source";
@@ -81,7 +82,7 @@ export default function MarkdownPreview({
         {mode === "preview" ? (
           <div id="print-target" ref={previewRef} className="h-full overflow-y-auto p-6">
             <div className="sop-prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkSubstituteVariables(values, variables)]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkGithubAlerts, remarkSubstituteVariables(values, variables)]}>
                 {template}
               </ReactMarkdown>
             </div>

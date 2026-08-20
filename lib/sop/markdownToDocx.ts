@@ -56,6 +56,22 @@ const CODE_BLOCK_STYLE_NAME = "SOP Code Block";
 const BLOCKQUOTE_STYLE_ID = "SopBlockquote";
 const BLOCKQUOTE_STYLE_NAME = "SOP Blockquote";
 
+// GitHub-style alert blockquotes (`> [!WARNING]` etc.) get a colored label
+// + border instead of the plain blockquote treatment, mirroring the
+// preview's remarkGithubAlerts.ts — so a document handed to someone as a
+// .docx still visually flags "this is an unverified assumption, not
+// confirmed fact" rather than reading like an ordinary note once exported.
+// Doesn't round-trip back through docxToMarkdown.ts (re-importing degrades
+// this to a plain blockquote, losing the [!TYPE] marker) — a bounded,
+// accepted gap rather than something this pass also solves.
+const ALERT_LABELS: Record<string, { label: string; color: string }> = {
+  WARNING: { label: "⚠ UNVERIFIED — CHECK BEFORE RELYING ON THIS", color: "B45309" },
+  CAUTION: { label: "⚠ CAUTION", color: "B91C1C" },
+  IMPORTANT: { label: "❗ IMPORTANT", color: "4338CA" },
+  NOTE: { label: "ℹ NOTE", color: "1D4ED8" },
+  TIP: { label: "💡 TIP", color: "047857" },
+};
+
 interface LoadedImage {
   type: "png" | "jpg" | "gif" | "bmp";
   data: Uint8Array;
@@ -251,6 +267,31 @@ async function convertTable(node: MdNode): Promise<Table> {
   });
 }
 
+/**
+ * If `node` (a blockquote) opens with a `[!TYPE]` marker, strips it from
+ * the AST in place and returns the matched type — same detection
+ * remarkGithubAlerts.ts does for the live preview, reimplemented here since
+ * this file walks its own lightweight MdNode tree rather than a full mdast
+ * one.
+ */
+function extractAlertType(node: MdNode): string | null {
+  const first = node.children?.[0];
+  if (!first || first.type !== "paragraph") return null;
+  const firstText = first.children?.[0];
+  if (!firstText || firstText.type !== "text" || !firstText.value) return null;
+
+  const match = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i.exec(firstText.value);
+  if (!match) return null;
+
+  const remainder = firstText.value.slice(match[0].length);
+  if (remainder.trim()) {
+    firstText.value = remainder.replace(/^\s+/, "");
+  } else {
+    first.children!.shift();
+  }
+  return match[1]!.toUpperCase();
+}
+
 async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
   switch (node.type) {
     case "heading": {
@@ -272,19 +313,36 @@ async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
       );
     }
     case "blockquote": {
+      const alertType = extractAlertType(node);
+      const alertInfo = alertType ? ALERT_LABELS[alertType] : undefined;
+      const borderColor = alertInfo?.color ?? "94A3B8";
+
       // Build these directly from inline runs rather than converting the
       // children generically and re-wrapping — Paragraph doesn't expose
       // its children back out, so there's no supported way to "add
       // styling" to an already-built Paragraph after the fact.
       const paragraphs: Paragraph[] = [];
+      if (alertInfo) {
+        paragraphs.push(
+          new Paragraph({
+            indent: { left: 720 },
+            border: { left: { style: BorderStyle.SINGLE, size: 12, color: borderColor, space: 8 } },
+            children: [new TextRun({ text: alertInfo.label, bold: true, color: alertInfo.color })],
+          })
+        );
+      }
       for (const child of node.children || []) {
         if (child.type === "paragraph") {
+          // extractAlertType may have emptied the marker-only first
+          // paragraph (the typical case, since the marker is its own line)
+          // — skip it rather than emitting a blank paragraph.
+          if ((child.children?.length ?? 0) === 0) continue;
           paragraphs.push(
             new Paragraph({
               style: BLOCKQUOTE_STYLE_ID,
               children: await convertInline(child.children || []),
               indent: { left: 720 },
-              border: { left: { style: BorderStyle.SINGLE, size: 12, color: "94A3B8", space: 8 } },
+              border: { left: { style: BorderStyle.SINGLE, size: 12, color: borderColor, space: 8 } },
             })
           );
         } else {

@@ -21,7 +21,14 @@ Rollback/cleanup steps must be real, executable commands — never pseudo-syntax
 
 For any step that is destructive, hard to reverse, or broad in effect (partition/disk resizing, tenant-wide or broad access/firewall policy changes, deleting or replacing a resource, anything that could cause an outage), prerequisites or step 1 must include an explicit safety checkpoint completed BEFORE the disruptive action — e.g. confirm a hypervisor/VM snapshot exists and finished successfully, confirm a recent verified backup exists and is restorable, or verify break-glass/out-of-band access works. Routine, low-risk, easily-reversible procedures don't need this.
 
-If the user prompt includes attached reference material about a specific tool, program, or environment (delimited below as "Reference material"), treat it as the authoritative source of truth for that tool's actual behavior, commands, flags, config syntax, and options — this is often an internal or non-public program you have no other knowledge of. Prefer facts from the reference material over generic assumptions or knowledge of similar-sounding tools, and do not invent commands, flags, or behavior that the material doesn't support or that contradicts it. Where the material doesn't cover something the SOP needs, fall back to clearly-generic best practice rather than presenting a guess as if it were confirmed by the material.`;
+If the user prompt includes attached reference material about a specific tool, program, or environment (delimited below as "Reference material"), treat it as the authoritative source of truth for that tool's actual behavior, commands, flags, config syntax, and options — this is often an internal or non-public program you have no other knowledge of. Prefer facts from the reference material over generic assumptions or knowledge of similar-sounding tools, and do not invent commands, flags, or behavior that the material doesn't support or that contradicts it. Where the material doesn't cover something the SOP needs, fall back to clearly-generic best practice rather than presenting a guess as if it were confirmed by the material.
+
+Flag assumptions you can't verify — distinct from variables. A {{variable}} is for a value that legitimately varies by site (an IP, a hostname) where the STRUCTURE of the step is already correct and only the value changes. Some topics instead require you to invent a fact you can't actually confirm — the exact service/daemon name, a config file path, whether SSH or a particular protocol is even available on the device, which OS or platform something runs, or any vendor/product-specific behavior you have no attached reference material or reliable general knowledge to back up (this comes up constantly for internal tools, custom/site-specific hardware setups, and less-common products — you'll often be asked for a procedure on a system you only know by name). Turning that into a {{variable}} would be wrong, since the whole approach might not apply at all, not just one value in it. Instead, mark it with a GitHub-style alert immediately after the affected step(s):
+
+> [!WARNING]
+> This assumes <the specific assumption, stated plainly — e.g. the exact service name, that SSH is available, the OS/platform>. Verify this matches the actual setup before relying on it — <what could be different instead, or how to check>.
+
+Use this for genuine uncertainty about whether an approach is even correct for this specific setup — not as a substitute for normal prerequisites, and not for values that legitimately just need to be filled in (those get a {{variable}}). If attached reference material confirms the fact, don't flag it. A procedure built around a niche or internal product with no confirming material should end up with several of these, not zero — presenting confident-sounding specifics you can't actually verify is worse than clearly flagging the guess.`;
 
 export function buildUserPrompt(topic: string, context: ContextAttachment[] = []): string {
   const contextBlock =
@@ -73,7 +80,13 @@ Rules:
 - Add a missing pre-flight safety checkpoint (prerequisites or step 1) if the SOP is destructive, hard to reverse, or broad in effect and doesn't already have one — e.g. confirm a snapshot/backup exists and is restorable, or verify break-glass access.
 - If the document is missing a section a real SOP needs (prerequisites, verification, rollback), add one — grounded in what the document already describes, not invented from nothing you have any basis for.
 - variables[].default should be the original/current value found in the document at that spot where one exists.
-- Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.`;
+- Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.
+- Flag assumptions you can't verify — distinct from variables. A {{variable}} is for a value that legitimately varies by site (an IP, a hostname) where the step's underlying approach is already correct. The document may instead rely on a fact that was never actually confirmed — an exact service/daemon name, a config file path, whether SSH or a particular protocol is even available, which OS/platform something runs, or any vendor/product-specific behavior stated with more confidence than it deserves (common for internal tools and less-common or custom hardware). Where you spot this, add a GitHub-style alert immediately after the affected step(s) rather than silently leaving it as unverified fact:
+
+  > [!WARNING]
+  > This assumes <the specific assumption>. Verify this matches the actual setup before relying on it — <what could be different, or how to check>.
+
+  Don't remove or hedge specifics the document already stated with genuine confidence — this is for flagging real uncertainty you notice, not hedging everything.`;
 
 export function buildReviewImprovePrompt(document: string): string {
   return `Here is the full text of an existing SOP to review and improve:\n\n${document.trim()}`;
