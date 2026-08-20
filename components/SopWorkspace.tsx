@@ -330,7 +330,7 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
-      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
       const res = await fetch("/api/analyze-import", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -381,7 +381,7 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
-      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
       const res = await fetch("/api/review-improve", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -553,11 +553,11 @@ export default function SopWorkspace() {
   }
 
   function handleCopy() {
-    void navigator.clipboard.writeText(renderTemplate(template, values));
+    void navigator.clipboard.writeText(renderTemplate(template, values, variables));
   }
 
   function handleExportMarkdown() {
-    const rendered = renderTemplate(template, values);
+    const rendered = renderTemplate(template, values, variables);
     const blob = new Blob([rendered], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -596,7 +596,7 @@ export default function SopWorkspace() {
     setExportingDocx(true);
     setError(null);
     try {
-      const rendered = renderTemplate(template, values);
+      const rendered = renderTemplate(template, values, variables);
       const blob = await markdownToDocxBlob(meta?.title || topic || "SOP", rendered);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

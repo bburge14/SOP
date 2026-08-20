@@ -59,7 +59,8 @@ export const sopJsonSchema = {
           // and may return one.
           default: {
             type: "string",
-            description: "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\")",
+            description:
+              "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\") — but for a variable that uniquely identifies one specific device/instance with no genuine typical value (a serial number, asset tag, MAC address, license key, or specific per-site IP/hostname/device name), use \"\" instead of a fabricated-but-plausible example. A made-up identifier that looks real is worse than an honestly empty field.",
           },
           type: { type: "string", enum: ["string", "number", "boolean"] },
         },

@@ -20,8 +20,18 @@ export function remarkSubstituteVariables(values: VariableValues, variables: Sop
   function substitutedTextNode(key: string, fullMatch: string): Text {
     const hasValue = key in values;
     const raw = values[key];
-    const substituted = hasValue ? (raw === undefined || raw === null ? "" : String(raw)) : fullMatch;
     const label = labelByKey.get(key);
+    const isEmpty = !hasValue || raw === undefined || raw === null || raw === "";
+
+    // A declared key with a genuinely empty value (e.g. a unique identifier
+    // — serial number, specific device IP — that SOP_SYSTEM_PROMPT now
+    // deliberately leaves blank instead of inventing a plausible-looking
+    // fake one) used to render as literally nothing, an invisible gap with
+    // no indication anything was missing. `[Field Label]` makes it obvious
+    // this needs real input, reusing the same amber "needs attention"
+    // treatment as an unknown/undeclared {{key}}.
+    const substituted = !hasValue ? fullMatch : isEmpty ? `[${label ?? key}]` : String(raw);
+
     return {
       type: "text",
       value: substituted,
@@ -30,7 +40,7 @@ export function remarkSubstituteVariables(values: VariableValues, variables: Sop
         hProperties: {
           "data-sop-var": key,
           title: label ? `Field: ${label}` : `Field: ${key}`,
-          className: ["sop-var-value"],
+          className: isEmpty ? ["sop-var-value", "unbound-placeholder"] : ["sop-var-value"],
         },
       },
     } as Text;
