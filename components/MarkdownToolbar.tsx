@@ -1,7 +1,22 @@
 "use client";
 
 import { RefObject } from "react";
-import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link2, List, ListOrdered, Quote, Table2 } from "lucide-react";
+import {
+  Bold,
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  ListTodo,
+  Minus,
+  Quote,
+  Strikethrough,
+  Table2,
+} from "lucide-react";
 
 interface EditResult {
   text: string;
@@ -49,6 +64,12 @@ export default function MarkdownToolbar({ textareaRef, value, onChange }: Markdo
       <ToolbarButton title="Inline code" onClick={() => apply((t, s, e) => wrapSelection(t, s, e, "`", "`", "code"))}>
         <Code className="size-3.5" />
       </ToolbarButton>
+      <ToolbarButton
+        title="Strikethrough"
+        onClick={() => apply((t, s, e) => wrapSelection(t, s, e, "~~", "~~", "strikethrough text"))}
+      >
+        <Strikethrough className="size-3.5" />
+      </ToolbarButton>
       <Divider />
       <ToolbarButton title="Heading 1" onClick={() => apply((t, s, e) => setHeadingLevel(t, s, e, 1))}>
         <Heading1 className="size-3.5" />
@@ -78,8 +99,14 @@ export default function MarkdownToolbar({ textareaRef, value, onChange }: Markdo
       >
         <Quote className="size-3.5" />
       </ToolbarButton>
+      <ToolbarButton
+        title="Task list"
+        onClick={() => apply((t, s, e) => applyLinePrefix(t, s, e, () => "- [ ] ", /^-\s\[[ x]\]\s+/))}
+      >
+        <ListTodo className="size-3.5" />
+      </ToolbarButton>
       <Divider />
-      <ToolbarButton title="Table" onClick={() => apply(insertTable)}>
+      <ToolbarButton title="Table" onClick={() => apply((t, s, e) => insertSnippet(t, s, e, "\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Value | Value |\n\n"))}>
         <Table2 className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
@@ -90,6 +117,9 @@ export default function MarkdownToolbar({ textareaRef, value, onChange }: Markdo
       </ToolbarButton>
       <ToolbarButton title="Link" onClick={() => apply(insertLink)}>
         <Link2 className="size-3.5" />
+      </ToolbarButton>
+      <ToolbarButton title="Horizontal rule" onClick={() => apply((t, s, e) => insertSnippet(t, s, e, "\n\n---\n\n"))}>
+        <Minus className="size-3.5" />
       </ToolbarButton>
     </div>
   );
@@ -170,8 +200,7 @@ function applyLinePrefix(
   return { text: newText, selectionStart: lineStart, selectionEnd: lineStart + newBlock.length };
 }
 
-function insertTable(text: string, start: number, end: number): EditResult {
-  const snippet = "\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Value | Value |\n\n";
+function insertSnippet(text: string, start: number, end: number, snippet: string): EditResult {
   const newText = text.slice(0, start) + snippet + text.slice(end);
   const cursor = start + snippet.length;
   return { text: newText, selectionStart: cursor, selectionEnd: cursor };

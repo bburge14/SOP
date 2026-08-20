@@ -63,10 +63,10 @@ export default function AddFieldDialog({ existingKeys, onAdd }: AddFieldDialogPr
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+          title="Add Custom Field"
+          className="flex items-center justify-center size-9 rounded-md border border-border text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
         >
           <Plus className="size-3.5" />
-          Add Custom Field
         </button>
       ) : (
         <form
