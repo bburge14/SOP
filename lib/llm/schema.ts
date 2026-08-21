@@ -49,7 +49,7 @@ export const sopJsonSchema = {
           key: {
             type: "string",
             description:
-              "Exact variable name used in the template, snake_case, must match a {{key}} placeholder. Only for a value decided BEFORE running the procedure. Never declare a key for a value only discovered DURING the procedure — a serial number, asset tag, MAC address, a DHCP-assigned IP/gateway, an activation code generated on the spot. Those get no key at all; write them as plain prose in template_markdown instead.",
+              "Exact variable name used in the template, snake_case, matching a {{key}} placeholder. Only for a value decided BEFORE running the procedure — never for one only discovered during it (see system rules); those get no key at all.",
           },
           label: { type: "string", description: "Human-readable label" },
           description: { type: "string", description: "Brief explanation of what value goes here" },
@@ -61,7 +61,7 @@ export const sopJsonSchema = {
           default: {
             type: "string",
             description:
-              "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\") — but for a variable that's genuinely unique per deployment with no common convention (an org/network name, a license key, a fixed per-site hostname/IP decided in advance), use \"\" instead of a fabricated-but-plausible example. A made-up value that looks real is worse than an honestly empty field. Do not declare a variable at all for a value only discovered during the procedure itself (a serial number read off a device, a DHCP-assigned IP) — that belongs in template_markdown as plain prose, never as a {{variable}}.",
+              "Sensible default value as a string, coerced per `type` (e.g. \"true\", \"8443\", \"vlan10\") — but for a variable genuinely unique per deployment with no common convention (an org name, a license key, a fixed hostname/IP decided in advance), use \"\" instead of a fabricated-but-plausible example.",
           },
           type: { type: "string", enum: ["string", "number", "boolean"] },
         },
@@ -71,7 +71,7 @@ export const sopJsonSchema = {
     template_markdown: {
       type: "string",
       description:
-        "Full procedural SOP in Markdown. Use {{variable_key}} mustache placeholders only for a value the operator decides BEFORE running the procedure (a target network name, a VLAN ID, a credential) — one canonical variable per underlying value, never split across redundant variables, and never leave a dependent value (e.g. a service/protocol tied to a port) hardcoded once the value it depends on is parameterized. Never use a {{variable}} for a value only discovered DURING the procedure (a serial number read off a device's label, a DHCP-assigned IP/gateway, an activation code generated on the spot) — write those as plain instructional prose describing exactly what to read or enter, with no placeholder at all. Include exact CLI commands, GUI paths, and verification steps. The rollback/cleanup section must use only real, executable commands — never bracketed pseudocode; if a step needs a runtime-assigned ID, include the actual lookup command followed by the actual command that uses its result. For any step built on a fact you cannot actually verify (an exact service name, config path, protocol availability, OS/platform, or other vendor-specific behavior invented rather than confirmed — common for internal or less-common tools), add a `> [!WARNING]` GitHub-style alert stating the assumption plainly, immediately after the step — do not present an unverified guess as settled fact.",
+        "Full procedural SOP in Markdown — seven numbered sections (Purpose, Scope, Prerequisites, Pre-[Procedure] Checklist, [Procedure] Procedure, Post-[Procedure] Validation, Rollback and Escalation), real interaction mode (GUI/physical/CLI, not CLI by default), and no hedging or [!WARNING]-style callouts anywhere — see system rules for the full versions of each. {{variable_key}} placeholders only for a value decided before running the procedure, never for one only discovered during it. Rollback steps must be real, executable, and in the same real interaction mode.",
     },
   },
   required: ["title", "category", "overview", "prerequisites", "variables", "template_markdown"],
