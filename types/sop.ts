@@ -66,6 +66,13 @@ export interface SopIdea {
   description: string;
 }
 
+/** One clarifying question asked by "Guided" generation before writing the SOP. */
+export interface ClarifyingQuestion {
+  key: string;
+  question: string;
+  placeholder: string;
+}
+
 /** A reusable {{key}} default remembered for a category, e.g. management_vlan -> "10". */
 export interface CategoryProfileDefault {
   key: string;

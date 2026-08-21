@@ -13,13 +13,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_CATEGORY_CONTEXT_CHARS = 5000;
+const MAX_CLARIFICATIONS = 8;
+const MAX_CLARIFICATION_ANSWER_CHARS = 1000;
 
 export async function POST(req: NextRequest) {
   let topic: unknown;
   let context: unknown;
   let categoryProfile: unknown;
+  let clarifications: unknown;
   try {
-    ({ topic, context, categoryProfile } = await req.json());
+    ({ topic, context, categoryProfile, clarifications } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -40,11 +43,14 @@ export async function POST(req: NextRequest) {
   const validatedCategoryProfile = validateCategoryProfile(categoryProfile);
   if (validatedCategoryProfile instanceof NextResponse) return validatedCategoryProfile;
 
+  const validatedClarifications = validateClarifications(clarifications);
+  if (validatedClarifications instanceof NextResponse) return validatedClarifications;
+
   try {
     const adapter = getLlmAdapter();
     const raw = await adapter.generate(
       SOP_SYSTEM_PROMPT,
-      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile),
+      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile, validatedClarifications),
       sopJsonSchema
     );
     const parsed = extractAndParseJson(raw);
@@ -123,6 +129,47 @@ function validateCategoryProfile(categoryProfile: unknown): { category: string; 
     );
   }
   return { category: category.trim(), context };
+}
+
+/** Returns the validated { question, answer } pairs, undefined if omitted, or a ready-to-return 400 response on bad input. */
+function validateClarifications(
+  clarifications: unknown
+): { question: string; answer: string }[] | undefined | NextResponse {
+  if (clarifications === undefined || clarifications === null) return undefined;
+
+  if (!Array.isArray(clarifications)) {
+    return NextResponse.json(
+      { error: "`clarifications` must be an array of { question, answer } pairs." },
+      { status: 400 }
+    );
+  }
+  if (clarifications.length > MAX_CLARIFICATIONS) {
+    return NextResponse.json({ error: `At most ${MAX_CLARIFICATIONS} clarifying answers are allowed.` }, { status: 400 });
+  }
+
+  const validated: { question: string; answer: string }[] = [];
+  for (const item of clarifications) {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      typeof (item as Record<string, unknown>).question !== "string" ||
+      typeof (item as Record<string, unknown>).answer !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Each clarification must be an object with a string `question` and `answer`." },
+        { status: 400 }
+      );
+    }
+    const { question, answer } = item as { question: string; answer: string };
+    if (answer.length > MAX_CLARIFICATION_ANSWER_CHARS) {
+      return NextResponse.json(
+        { error: `Each clarification answer must be ${MAX_CLARIFICATION_ANSWER_CHARS.toLocaleString()} characters or fewer.` },
+        { status: 400 }
+      );
+    }
+    validated.push({ question, answer });
+  }
+  return validated;
 }
 
 function statusFor(err: unknown): number {

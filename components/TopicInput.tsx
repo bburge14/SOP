@@ -1,13 +1,26 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { FilePlus2, FileText, Lightbulb, Loader2, Paperclip, ShieldAlert, Sparkles, Upload, X } from "lucide-react";
+import {
+  FilePlus2,
+  FileText,
+  Lightbulb,
+  Loader2,
+  MessageCircleQuestion,
+  Paperclip,
+  ShieldAlert,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 import CategoryProfilePanel from "@/components/CategoryProfilePanel";
 import type { CategoryProfileDefault, ContextAttachment, SopIdea } from "@/types/sop";
 
 interface TopicInputProps {
   onSubmit: (topic: string) => void;
+  onStartGuided: (topic: string) => void;
+  askingGuidedQuestions: boolean;
   onImport: (file: File) => void;
   onStartBlank: () => void;
   loading: boolean;
@@ -30,6 +43,8 @@ interface TopicInputProps {
 
 export default function TopicInput({
   onSubmit,
+  onStartGuided,
+  askingGuidedQuestions,
   onImport,
   onStartBlank,
   loading,
@@ -151,6 +166,15 @@ export default function TopicInput({
         >
           <Paperclip className="size-4" />
           Attach Reference
+        </button>
+        <button
+          type="button"
+          onClick={() => topic.trim() && !loading && !askingGuidedQuestions && onStartGuided(topic.trim())}
+          disabled={loading || askingGuidedQuestions || !topic.trim()}
+          title="Not sure how to structure this SOP? Get asked a few clarifying questions first (vendor, environment, conventions), then generate from your answers."
+          className="flex items-center justify-center size-9 shrink-0 rounded-lg border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {askingGuidedQuestions ? <Loader2 className="size-4 animate-spin" /> : <MessageCircleQuestion className="size-4" />}
         </button>
         <button
           type="button"

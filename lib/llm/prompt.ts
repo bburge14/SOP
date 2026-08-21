@@ -43,7 +43,8 @@ If a "Category profile" block is included below, it's environment context the us
 export function buildUserPrompt(
   topic: string,
   context: ContextAttachment[] = [],
-  categoryProfile?: { category: string; context: string }
+  categoryProfile?: { category: string; context: string },
+  clarifications?: { question: string; answer: string }[]
 ): string {
   const contextBlock =
     context.length > 0
@@ -56,7 +57,14 @@ export function buildUserPrompt(
       ? `\n\n---\nCategory profile for "${categoryProfile.category}" — environment facts already known for this category (see system instructions on how to use this):\n\n${categoryProfile.context.trim()}\n---`
       : "";
   const categoryLine = categoryProfile ? `\n\nCategory: ${categoryProfile.category}` : "";
-  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}`;
+  const answered = (clarifications ?? []).filter((c) => c.answer.trim());
+  const clarificationsBlock =
+    answered.length > 0
+      ? `\n\n---\nAnswers to clarifying questions asked before generating this SOP — treat these as authoritative facts about this specific setup, not assumptions to flag:\n\n` +
+        answered.map((c) => `Q: ${c.question}\nA: ${c.answer.trim()}`).join("\n\n") +
+        `\n---`
+      : "";
+  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}${clarificationsBlock}`;
 }
 
 // Used by the optional "Scan with AI" action on an imported document — the
@@ -127,4 +135,30 @@ Rules:
 export function buildSuggestIdeasPrompt(context: ContextAttachment[]): string {
   const material = context.map((f) => `### ${f.name}\n${f.content.trim()}`).join("\n\n");
   return `Here is the reference material to base SOP ideas on:\n\n${material}`;
+}
+
+// Used by "Guided" generation — the user has a rough topic but doesn't
+// necessarily know what specifics make a real SOP for it (the vendor, the
+// environment, existing conventions), which is exactly the gap that leads
+// to a generic or wrong-for-their-setup result. This asks for those
+// specifics up front instead of silently guessing at generation time.
+export const CLARIFYING_QUESTIONS_SYSTEM_PROMPT = `You are helping a technical writer figure out what they need to specify before an SOP can be written well for their topic.
+
+Given a rough SOP topic (and optionally attached reference material), ask the specific questions a technical writer would actually need answered before they could write a concrete, correct procedure — not generic ("what's the topic?", already given), but things like: which vendor/product/platform, which environment (cloud/on-prem/hybrid, which OS), any existing conventions or tools already in use (ticketing system, naming scheme, standard access method), the risk/rollback expectations, or any other fact that would otherwise have to be guessed or left as a generic placeholder.
+
+Rules:
+- Ask only questions whose answer would meaningfully change what gets written — not filler, not restating the topic.
+- Each question must be answerable in a sentence or two, not an essay. Prefer concrete, closed-ended phrasing ("Which Meraki switch model?") over open-ended ones ("Tell me about your network").
+- Typically 3-6 questions. Ask fewer if the topic is already specific enough that little is genuinely unknown; ask up to 8 only if the topic is unusually broad. Never ask zero — if the topic already looks fully specified, ask about environment/rollback/safety expectations instead, since those are almost always worth confirming.
+- If reference material is attached, don't ask about anything it already answers — read it first.
+- Every question needs a short, concrete example answer as its \`placeholder\` (e.g. "Cisco Meraki MS225" or "AWS, us-east-1") so someone who's unsure what kind of answer is expected has a model to go on — use "Leave blank if not applicable" when a question might not apply.`;
+
+export function buildClarifyingQuestionsPrompt(topic: string, context: ContextAttachment[] = []): string {
+  const contextBlock =
+    context.length > 0
+      ? `\n\n---\nReference material already available for this task — don't ask about anything this already answers:\n\n` +
+        context.map((f) => `### ${f.name}\n${f.content.trim()}`).join("\n\n") +
+        `\n---`
+      : "";
+  return `Here is the rough SOP topic to ask clarifying questions about:\n\n${topic.trim()}${contextBlock}`;
 }

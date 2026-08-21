@@ -12,6 +12,7 @@ import DesktopSettingsPanel from "@/components/DesktopSettingsPanel";
 import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/PreferencesPanel";
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import LibraryPanel from "@/components/LibraryPanel";
+import GuidedQuestionsDialog from "@/components/GuidedQuestionsDialog";
 import { extractPlaceholders, renderTemplate, unparameterize } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
@@ -20,7 +21,15 @@ import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLim
 import { redactSecrets } from "@/lib/sop/redactSecrets";
 import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
 import { getCategoryProfile, listCategoryProfiles } from "@/lib/sop/categoryProfiles";
-import type { CategoryProfileDefault, ContextAttachment, SavedSop, SopIdea, SopVariable, VariableValues } from "@/types/sop";
+import type {
+  CategoryProfileDefault,
+  ClarifyingQuestion,
+  ContextAttachment,
+  SavedSop,
+  SopIdea,
+  SopVariable,
+  VariableValues,
+} from "@/types/sop";
 
 type ElectronGate = "checking" | "needs-setup" | "ready";
 
@@ -87,6 +96,13 @@ export default function SopWorkspace() {
   // saving into the category's profile right after Save to Library —
   // reviewed/approved in CategoryProfilePanel, never written automatically.
   const [reviewCandidates, setReviewCandidates] = useState<CategoryProfileDefault[] | null>(null);
+  // "Guided" generation: ask the AI a handful of clarifying questions about
+  // the topic before generating, for when you know roughly what you need
+  // an SOP for but not how to break it into the right steps/specifics.
+  // guidedQuestions is non-null exactly while the dialog should be open.
+  const [askingGuidedQuestions, setAskingGuidedQuestions] = useState(false);
+  const [guidedTopic, setGuidedTopic] = useState("");
+  const [guidedQuestions, setGuidedQuestions] = useState<ClarifyingQuestion[] | null>(null);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -109,14 +125,15 @@ export default function SopWorkspace() {
 
   const hasSop = meta !== null;
 
-  async function generate(newTopic: string) {
+  async function generate(newTopic: string, clarifications?: { question: string; answer: string }[]) {
     setLoading(true);
     setError(null);
     setErrorDetail(null);
     try {
       // contextFiles are already redacted at attach time (handleAddContextFiles) —
-      // only the topic still needs it here, in case a secret got pasted into it directly.
+      // only the topic and freshly-typed clarification answers still need it here.
       const { text: redactedTopic } = redactSecrets(newTopic);
+      const redactedClarifications = clarifications?.map((c) => ({ question: c.question, answer: redactSecrets(c.answer).text }));
       const trimmedCategory = category.trim();
       const profile = trimmedCategory ? await getCategoryProfile(trimmedCategory) : undefined;
       const res = await fetch("/api/generate", {
@@ -126,6 +143,7 @@ export default function SopWorkspace() {
           topic: redactedTopic,
           context: contextFiles,
           categoryProfile: trimmedCategory ? { category: trimmedCategory, context: profile?.context ?? "" } : undefined,
+          clarifications: redactedClarifications,
         }),
       });
       const data = await res.json();
@@ -167,6 +185,43 @@ export default function SopWorkspace() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleStartGuided(newTopic: string) {
+    setAskingGuidedQuestions(true);
+    setError(null);
+    setErrorDetail(null);
+    try {
+      // contextFiles are already redacted at attach time; only the freshly-typed topic needs it here.
+      const { text: redactedTopic } = redactSecrets(newTopic);
+      const res = await fetch("/api/clarify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topic: redactedTopic, context: contextFiles }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to generate clarifying questions.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
+      setGuidedTopic(newTopic);
+      setGuidedQuestions(data.questions as ClarifyingQuestion[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error generating clarifying questions.");
+    } finally {
+      setAskingGuidedQuestions(false);
+    }
+  }
+
+  function handleGuidedSubmit(answers: { question: string; answer: string }[]) {
+    setGuidedQuestions(null);
+    void generate(guidedTopic, answers);
+  }
+
+  function handleGuidedSkip() {
+    setGuidedQuestions(null);
+    void generate(guidedTopic);
   }
 
   async function handleImport(file: File) {
@@ -719,8 +774,21 @@ export default function SopWorkspace() {
 
       <LibraryPanel open={libraryOpen} onClose={() => setLibraryOpen(false)} onLoad={handleLoadFromLibrary} />
 
+      {guidedQuestions && (
+        <GuidedQuestionsDialog
+          topic={guidedTopic}
+          questions={guidedQuestions}
+          submitting={loading}
+          onSubmit={handleGuidedSubmit}
+          onSkip={handleGuidedSkip}
+          onClose={() => setGuidedQuestions(null)}
+        />
+      )}
+
       <TopicInput
         onSubmit={(t) => void generate(t)}
+        onStartGuided={(t) => void handleStartGuided(t)}
+        askingGuidedQuestions={askingGuidedQuestions}
         onImport={(f) => void handleImport(f)}
         onStartBlank={handleStartBlank}
         loading={loading}

@@ -119,3 +119,52 @@ export const sopIdeasJsonSchema = {
   },
   required: ["ideas"],
 } as const;
+
+/**
+ * Shape for "Guided" generation's clarifying-questions step
+ * (app/api/clarify/route.ts) — asked before the real generation call so
+ * someone who doesn't already know how to structure an SOP for this topic
+ * gets prompted for the specifics a technical writer would actually need
+ * (vendor/platform, environment, existing conventions, risk tolerance)
+ * instead of having to think of them unprompted. Answers get appended to
+ * the normal generate() call as grounding, same mechanism as a category
+ * profile's context or attached reference material.
+ */
+export const clarifyingQuestionsZodSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        key: z.string().min(1),
+        question: z.string().min(1),
+        placeholder: z.string().default(""),
+      })
+    )
+    .min(1)
+    .max(8),
+});
+
+export const clarifyingQuestionsJsonSchema = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "Short snake_case identifier for this question, e.g. vendor_platform" },
+          question: {
+            type: "string",
+            description:
+              "One specific, concrete question a technical writer would need answered before writing this SOP well — not generic ('what's the topic?'), and answerable in a sentence or two, not an essay",
+          },
+          placeholder: {
+            type: "string",
+            description: "A short example answer shown as input placeholder text, e.g. 'Cisco Meraki MS225' or 'Leave blank if none'",
+          },
+        },
+        required: ["key", "question", "placeholder"],
+      },
+    },
+  },
+  required: ["questions"],
+} as const;

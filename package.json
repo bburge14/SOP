@@ -1,7 +1,7 @@
 {
   "name": "sop-writer",
   "productName": "SOP Writer",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "Generate parameterized Standard Operating Procedures with an LLM.",
   "author": "bburge14 <bradey.burge@gmail.com>",
   "private": true,
