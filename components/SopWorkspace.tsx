@@ -13,6 +13,7 @@ import PreferencesPanel, { readHoverHighlightEnabled } from "@/components/Prefer
 import DesktopOnboarding from "@/components/DesktopOnboarding";
 import LibraryPanel from "@/components/LibraryPanel";
 import GuidedQuestionsDialog from "@/components/GuidedQuestionsDialog";
+import RefinePanel from "@/components/RefinePanel";
 import { extractPlaceholders, renderTemplate, unparameterize } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
@@ -103,6 +104,13 @@ export default function SopWorkspace() {
   const [askingGuidedQuestions, setAskingGuidedQuestions] = useState(false);
   const [guidedTopic, setGuidedTopic] = useState("");
   const [guidedQuestions, setGuidedQuestions] = useState<ClarifyingQuestion[] | null>(null);
+  // "Refine" — multi-turn "tell the AI what to change" session. History is
+  // just the list of prior instructions (the document itself already
+  // reflects them); reset whenever the whole document is replaced, kept
+  // across in-place edits (Scan with AI, Review & Improve).
+  const [refinePanelOpen, setRefinePanelOpen] = useState(false);
+  const [refineHistory, setRefineHistory] = useState<string[]>([]);
+  const [refining, setRefining] = useState(false);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -175,6 +183,7 @@ export default function SopWorkspace() {
       setTopic(newTopic);
       setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
       setCategory(sop.category);
+      setRefineHistory([]);
       setVariables(seededVariables);
       setValues(Object.fromEntries(seededVariables.map((v) => [v.key, v.default])));
       setTemplate(sop.template_markdown);
@@ -285,6 +294,7 @@ export default function SopWorkspace() {
       prerequisites: [],
     });
     setCategory("Imported");
+    setRefineHistory([]);
     setVariables(importedVariables);
     setValues(Object.fromEntries(importedVariables.map((v) => [v.key, v.default])));
     setTemplate(text);
@@ -497,6 +507,49 @@ export default function SopWorkspace() {
     }
   }
 
+  async function handleRefine(instruction: string) {
+    setRefining(true);
+    setError(null);
+    setErrorDetail(null);
+    try {
+      const { text: redactedInstruction } = redactSecrets(instruction);
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
+      const res = await fetch("/api/refine", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ document: redactedDocument, instructions: refineHistory, newInstruction: redactedInstruction }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to refine SOP.");
+        setErrorDetail(typeof data.detail === "string" ? data.detail : null);
+        return;
+      }
+
+      const sop = data.sop as {
+        title: string;
+        category: string;
+        overview: string;
+        prerequisites: string[];
+        variables: SopVariable[];
+        template_markdown: string;
+      };
+
+      setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
+      setCategory(sop.category);
+      setVariables(sop.variables);
+      setValues(Object.fromEntries(sop.variables.map((v) => [v.key, v.default])));
+      setTemplate(sop.template_markdown);
+      // Stored as-typed (not the redacted copy) — this is your own text
+      // shown back to you locally, not something being re-transmitted.
+      setRefineHistory((prev) => [...prev, instruction]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error refining SOP.");
+    } finally {
+      setRefining(false);
+    }
+  }
+
   function handleStartBlank() {
     if (hasSop) {
       const confirmed = window.confirm("Starting a blank SOP will discard your current field values and edits. Continue?");
@@ -505,6 +558,7 @@ export default function SopWorkspace() {
     setTopic("");
     setMeta({ title: "Untitled SOP", category: "Draft", overview: "", prerequisites: [] });
     setCategory("Draft");
+    setRefineHistory([]);
     setVariables([]);
     setValues({});
     setTemplate("# Untitled SOP\n\n");
@@ -574,6 +628,7 @@ export default function SopWorkspace() {
     setTopic(sop.topic);
     setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
     setCategory(sop.category);
+    setRefineHistory([]);
     setVariables(sop.variables);
     setValues(sop.values);
     setTemplate(sop.template);
@@ -785,6 +840,14 @@ export default function SopWorkspace() {
         />
       )}
 
+      <RefinePanel
+        open={refinePanelOpen}
+        onClose={() => setRefinePanelOpen(false)}
+        history={refineHistory}
+        onSubmit={(instruction) => void handleRefine(instruction)}
+        refining={refining}
+      />
+
       <TopicInput
         onSubmit={(t) => void generate(t)}
         onStartGuided={(t) => void handleStartGuided(t)}
@@ -906,7 +969,7 @@ export default function SopWorkspace() {
             <ActionBar
               onRegenerate={handleRegenerate}
               regenerating={loading}
-              disabled={loading || analyzing || improving}
+              disabled={loading || analyzing || improving || refining}
               onCopy={handleCopy}
               onExportMarkdown={handleExportMarkdown}
               onExportPdf={handleExportPdf}
@@ -919,6 +982,7 @@ export default function SopWorkspace() {
               analyzing={analyzing}
               onReviewAndImprove={() => void handleReviewAndImprove()}
               improving={improving}
+              onOpenRefine={() => setRefinePanelOpen(true)}
             />
             <MarkdownPreview
               template={template}

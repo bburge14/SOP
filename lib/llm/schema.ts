@@ -71,7 +71,7 @@ export const sopJsonSchema = {
     template_markdown: {
       type: "string",
       description:
-        "Full procedural SOP in Markdown — seven numbered sections (Purpose, Scope, Prerequisites, Pre-[Procedure] Checklist, [Procedure] Procedure, Post-[Procedure] Validation, Rollback and Escalation), real interaction mode (GUI/physical/CLI, not CLI by default), and no hedging or [!WARNING]-style callouts anywhere — see system rules for the full versions of each. {{variable_key}} placeholders only for a value decided before running the procedure, never for one only discovered during it. Rollback steps must be real, executable, and in the same real interaction mode.",
+        "Full procedural SOP in Markdown. First line is a single `# ` (level 1) document title. Below it, seven `## ` (level 2) sections (Purpose, Scope, Prerequisites, Pre-[Procedure] Checklist, [Procedure] Procedure, Post-[Procedure] Validation, Rollback and Escalation), each numbered in its heading text (`## 1. Purpose`, `## 2. Scope`, ... never level 1, never unnumbered), real interaction mode (GUI/physical/CLI, not CLI by default), and no hedging or [!WARNING]-style callouts anywhere — see system rules for the full versions of each. {{variable_key}} placeholders only for a value decided before running the procedure, never for one only discovered during it. Rollback steps must be real, executable, and in the same real interaction mode.",
     },
   },
   required: ["title", "category", "overview", "prerequisites", "variables", "template_markdown"],

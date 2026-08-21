@@ -9,6 +9,7 @@ import {
   FileType2,
   ImagePlus,
   Loader2,
+  MessagesSquare,
   Printer,
   RefreshCw,
   ScanSearch,
@@ -34,6 +35,7 @@ interface ActionBarProps {
   analyzing: boolean;
   onReviewAndImprove: () => void;
   improving: boolean;
+  onOpenRefine: () => void;
 }
 
 // Shared by every icon-only button in this bar — square, bordered, tooltip
@@ -57,6 +59,7 @@ export default function ActionBar({
   analyzing,
   onReviewAndImprove,
   improving,
+  onOpenRefine,
 }: ActionBarProps) {
   const [copied, setCopied] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +108,16 @@ export default function ActionBar({
         className={ICON_BUTTON}
       >
         {improving ? <Loader2 className="size-3.5 animate-spin" /> : <WandSparkles className="size-3.5" />}
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenRefine}
+        disabled={disabled}
+        title="Refine with AI — tell it what to change, one instruction at a time; each one builds on the last"
+        className={ICON_BUTTON}
+      >
+        <MessagesSquare className="size-3.5" />
       </button>
 
       <input

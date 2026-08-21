@@ -9,15 +9,15 @@ THE SINGLE MOST IMPORTANT RULE: NEVER create a {{variable}} for a value only dis
   RIGHT: "Enter the switch's serial number, printed on the label on the underside of the unit."
 If needed again later, still don't parameterize it — have the first step say to record it, and refer back in prose ("using the serial number recorded in Step 3").
 
-Document structure — template_markdown is seven numbered sections (retitle to fit the procedure, e.g. "Pre-Deployment Checklist"), matching how an experienced sysadmin actually documents a procedure they've run many times:
-1. Purpose (1-2 sentences)
-2. Scope (what's covered, what's excluded — e.g. "document emergency occurrences after the fact instead of following this live")
-3. Prerequisites (bulleted: approvals, access, tools, confirmations)
-4. Pre-[Procedure] Checklist (numbered prep/verification steps — notifications, active sessions/jobs, backup confirmed)
-5. [Procedure] Procedure (numbered execution steps, real interaction mode — see below)
-6. Post-[Procedure] Validation (numbered: confirm success — connectivity, service status, functional checks)
-7. Rollback and Escalation (bulleted: what to do if it fails, how to recover, who to escalate to)
-Compress a section with little to say rather than padding it; never drop one outright.
+Document structure — the FIRST line of template_markdown is always a single "# " (one hash, heading level 1) document title, nothing else at that level. Every one of the seven sections below it is a "## " (two hashes, heading level 2) heading — never level 1, and never bare/unnumbered — with its number written into the heading text itself, exactly like "## 1. Purpose". Retitle the noun to fit the procedure (e.g. "## 4. Pre-Deployment Checklist") but always keep both the "## " level and the leading "N. " in every one of the seven headings:
+## 1. Purpose (1-2 sentences)
+## 2. Scope (what's covered, what's excluded — e.g. "document emergency occurrences after the fact instead of following this live")
+## 3. Prerequisites (bulleted: approvals, access, tools, confirmations)
+## 4. Pre-[Procedure] Checklist (numbered prep/verification steps — notifications, active sessions/jobs, backup confirmed)
+## 5. [Procedure] Procedure (numbered execution steps, real interaction mode — see below)
+## 6. Post-[Procedure] Validation (numbered: confirm success — connectivity, service status, functional checks)
+## 7. Rollback and Escalation (bulleted: what to do if it fails, how to recover, who to escalate to)
+Steps within a section are their own numbered or bulleted list starting fresh at 1 (that per-step numbering is separate from, and doesn't repeat, the section's own "N." — e.g. section "## 4. Pre-Restart Checklist" contains a list that starts "1. Confirm...", "2. Notify...", not "4.1"). Compress a section with little to say rather than padding it; never drop one outright.
 
 Never hedge or flag uncertainty inline — no [!WARNING] callouts, no "this assumes...", no disclaimers. Write every step as confident, plain fact. If unsure of one exact vendor-specific detail (a service name, a config path, exact menu wording), don't invent it and don't flag the gap — describe the general action or standard interface instead of a specific that might be wrong.
 
@@ -112,7 +112,7 @@ Rules:
 - Fix variable redundancy: if the document expresses one underlying value across multiple separate variables the user would have to keep in sync by hand, merge them into a single canonical variable used everywhere that value is needed.
 - Fix rollback/cleanup pseudocode: replace bracketed placeholders or pseudo-syntax with real, executable commands. If a step needs a value only knowable at execution time, give the actual lookup command followed by the actual command that uses its result.
 - Add a missing pre-flight safety checkpoint (prerequisites or step 1) if the SOP is destructive, hard to reverse, or broad in effect and doesn't already have one — e.g. confirm a snapshot/backup exists and is restorable, or verify break-glass access.
-- If the document is missing a section a real SOP needs, add it, working toward this seven-part shape where it makes sense to: Purpose, Scope, Prerequisites, Pre-[Procedure] Checklist, [Procedure] Procedure, Post-[Procedure] Validation, Rollback and Escalation — grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps, don't rewrite what isn't broken.
+- If the document is missing a section a real SOP needs, add it, working toward this seven-part shape where it makes sense to: "## 1. Purpose", "## 2. Scope", "## 3. Prerequisites", "## 4. Pre-[Procedure] Checklist", "## 5. [Procedure] Procedure", "## 6. Post-[Procedure] Validation", "## 7. Rollback and Escalation" — each heading numbered in the heading text itself, not a bare unnumbered heading — grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps (including adding the "N. " numbering to headings that are missing it), don't rewrite what isn't broken.
 - variables[].default should be the original/current value found in the document at that spot where one exists — but if you're parameterizing a genuinely unique, decided-in-advance value (an org/network name, a license/activation key, a fixed per-site hostname/IP chosen ahead of time) and the document didn't already contain a real one, use an empty string ("") rather than inventing a plausible-looking example. A fabricated value that looks real is worse than an honestly empty field. For a pre-decided value that would normally come from a physical label or an external system of record, phrase the step to say where it comes from rather than leaving a bare unexplained field.
 - Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.
 - Strip hedging — if the document has a "[!WARNING]"-style callout, a "this assumes..." aside, or any other inline disclaimer flagging its own uncertainty, remove it. Rewrite the affected step as a plain, confident statement using safe, standard, verifiably-correct language instead of the fabricated-or-flagged specific — don't just delete the warning and leave the guess it was flagging behind. Don't touch specifics the document states with genuine confidence; this is only for removing existing hedges, not for hedging or re-flagging anything yourself.
@@ -120,6 +120,34 @@ Rules:
 
 export function buildReviewImprovePrompt(document: string): string {
   return `Here is the full text of an existing SOP to review and improve:\n\n${document.trim()}`;
+}
+
+// Used by "Refine" — a running, multi-turn editing session where the user
+// gives specific instructions one at a time ("this is for Linux, not
+// Windows", "add a DNS check before the reboot step") rather than a
+// one-shot topic or a fixed quality pass. There's no real multi-turn chat
+// state on the wire — each call resends the full current document plus the
+// list of instructions already applied, so the model has everything it
+// needs to behave like it remembers the conversation without requiring any
+// adapter/provider-specific multi-turn plumbing.
+export const REFINE_SYSTEM_PROMPT = `You are iteratively revising an existing SOP based on a user's specific instructions, one at a time, as part of an ongoing editing session — not authoring a new document and not doing a general quality pass.
+
+Rules:
+- Apply ONLY the new instruction given below. Don't undo, re-litigate, or second-guess earlier instructions unless the new one explicitly asks you to change something already done.
+- Preserve everything the instruction doesn't touch — wording, structure, other steps, other variables — exactly as given in the current document.
+- If applying the instruction leaves something else in the document inconsistent (changing the OS/platform means other steps still reference the old one; a value the instruction changes is used elsewhere), fix that too — the result must be internally consistent, not just the one literal thing the instruction named.
+- For a variable that already exists in the document, its default in your response MUST be the current value as it actually appears in the document — preserve it exactly, never replace it with a fresh generic example. Only a genuinely new variable this instruction introduces gets a fresh default, following the normal rule (a realistic default, or "" for a value unique per deployment with no common convention).
+- Hold the same standards as generation: {{variable_key}} only for a value decided before running the procedure, never for one only discovered during it; snake_case keys; every {{key}} declared in variables[] and vice versa; no hardcoded values coupled to a variable; no redundant variables; real executable rollback steps; the real interaction mode (don't introduce CLI where the document is GUI-driven, or vice versa, unless the instruction asks for that); the seven-section numbered-heading structure ("## 1. Purpose" etc.) if the document already has it; no hedging or "[!WARNING]"-style callouts.
+- If the instruction is genuinely ambiguous about what it refers to, make the most reasonable interpretation and apply it as a concrete edit — there's no way to ask a clarifying question back, so don't hedge or leave it half-applied.
+- Only update title/category/overview if the instruction changes what the document is fundamentally about; otherwise leave them as they were.`;
+
+export function buildRefinePrompt(document: string, priorInstructions: string[], newInstruction: string): string {
+  const historyBlock =
+    priorInstructions.length > 0
+      ? `\n\nInstructions already applied earlier in this session, in order (the document below already reflects all of them):\n` +
+        priorInstructions.map((instr, i) => `${i + 1}. ${instr}`).join("\n")
+      : "";
+  return `Here is the current SOP document:\n\n${document.trim()}${historyBlock}\n\nNew instruction to apply now:\n${newInstruction.trim()}`;
 }
 
 // Used by "Suggest Ideas" — the user has attached documentation/manuals for
