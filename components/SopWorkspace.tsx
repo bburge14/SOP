@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Library as LibraryIcon, Loader2, Save } from "lucide-react";
 import TopicInput from "@/components/TopicInput";
 import VariableForm from "@/components/VariableForm";
@@ -22,6 +22,7 @@ import { MAX_CONTEXT_FILES, MAX_CONTEXT_TOTAL_CHARS } from "@/lib/sop/contextLim
 import { redactSecrets } from "@/lib/sop/redactSecrets";
 import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
 import { getCategoryProfile, listCategoryProfiles } from "@/lib/sop/categoryProfiles";
+import { PRESET_CATEGORIES } from "@/lib/sop/presetCategories";
 import type {
   CategoryProfileDefault,
   ClarifyingQuestion,
@@ -130,6 +131,23 @@ export default function SopWorkspace() {
   useEffect(() => {
     void refreshCategoryProfiles();
   }, []);
+
+  // Preset categories plus every one you've actually used (saved a
+  // profile for), so the picker has sensible options from the very first
+  // generation, not just after you've built up your own history. Case-
+  // insensitive de-dupe keeps a preset from showing twice if you've
+  // already saved a profile under matching casing.
+  const categorySuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const c of [...PRESET_CATEGORIES, ...categoryNames]) {
+      const key = c.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(c);
+    }
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [categoryNames]);
 
   const hasSop = meta !== null;
 
@@ -865,7 +883,7 @@ export default function SopWorkspace() {
         onClearSuggestedIdeas={() => setSuggestedIdeas(null)}
         category={category}
         onCategoryChange={setCategory}
-        categorySuggestions={categoryNames}
+        categorySuggestions={categorySuggestions}
         reviewCandidates={reviewCandidates}
         onReviewCandidatesHandled={() => setReviewCandidates(null)}
         onCategoryProfileSaved={() => void refreshCategoryProfiles()}
@@ -919,8 +937,9 @@ export default function SopWorkspace() {
                     setMeta((prev) => (prev ? { ...prev, category: e.target.value } : prev));
                     setCategory(e.target.value);
                   }}
-                  title="Category — used to organize the library"
-                  className="text-[11px] font-medium uppercase tracking-wide text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-32"
+                  list="category-suggestions"
+                  title="Category — wrong? Change it here (pick a suggestion or type your own), then Save to Library to update the saved copy"
+                  className="text-[11px] font-medium uppercase tracking-wide text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-36"
                 />
                 <button
                   type="button"
