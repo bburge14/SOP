@@ -139,7 +139,11 @@ Rules:
 - For a variable that already exists in the document, its default in your response MUST be the current value as it actually appears in the document — preserve it exactly, never replace it with a fresh generic example. Only a genuinely new variable this instruction introduces gets a fresh default, following the normal rule (a realistic default, or "" for a value unique per deployment with no common convention).
 - Hold the same standards as generation: {{variable_key}} only for a value decided before running the procedure, never for one only discovered during it; snake_case keys; every {{key}} declared in variables[] and vice versa; no hardcoded values coupled to a variable; no redundant variables; real executable rollback steps; the real interaction mode (don't introduce CLI where the document is GUI-driven, or vice versa, unless the instruction asks for that); the seven-section numbered-heading structure ("## 1. Purpose" etc.) if the document already has it; no hedging or "[!WARNING]"-style callouts.
 - If the instruction is genuinely ambiguous about what it refers to, make the most reasonable interpretation and apply it as a concrete edit — there's no way to ask a clarifying question back, so don't hedge or leave it half-applied.
-- Only update title/category/overview if the instruction changes what the document is fundamentally about; otherwise leave them as they were.`;
+- Only update title/category/overview if the instruction changes what the document is fundamentally about; otherwise leave them as they were.
+- When an instruction removes a variable, rewrite every sentence that referenced it as genuinely natural prose with no trace of the removal mechanism left behind. Stripping the {{}} braces and leaving the bare variable name, or replacing it with a bracket like [variable_name], is NOT a reword — that is broken text, worse than the placeholder it replaced.
+  WRONG: "Enter the Serial Number: switch_serial_number and click Continue." or "Enter the Serial Number: [switch_serial_number] and click Continue."
+  RIGHT: "Enter the switch's serial number and click Continue."
+  The result must read exactly like a sentence a person would actually write, as if that value had never been a variable at all.`;
 
 export function buildRefinePrompt(document: string, priorInstructions: string[], newInstruction: string): string {
   const historyBlock =

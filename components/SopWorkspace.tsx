@@ -14,7 +14,7 @@ import DesktopOnboarding from "@/components/DesktopOnboarding";
 import LibraryPanel from "@/components/LibraryPanel";
 import GuidedQuestionsDialog from "@/components/GuidedQuestionsDialog";
 import RefinePanel from "@/components/RefinePanel";
-import { extractPlaceholders, renderTemplate, unparameterize } from "@/lib/sop/template";
+import { extractPlaceholders, renderTemplate } from "@/lib/sop/template";
 import { markdownToDocxBlob } from "@/lib/sop/markdownToDocx";
 import { readFileAsText } from "@/lib/sop/readFileAsText";
 import { detectAndTemplatizeVariables } from "@/lib/sop/detectVariables";
@@ -112,6 +112,10 @@ export default function SopWorkspace() {
   const [refinePanelOpen, setRefinePanelOpen] = useState(false);
   const [refineHistory, setRefineHistory] = useState<string[]>([]);
   const [refining, setRefining] = useState(false);
+  // Which field's Remove button triggered the in-flight refine, if any —
+  // lets VariableForm show a spinner on that one row specifically instead
+  // of just a generic disabled state everywhere.
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -442,7 +446,7 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
-      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
       const res = await fetch("/api/analyze-import", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -491,7 +495,7 @@ export default function SopWorkspace() {
     setError(null);
     setErrorDetail(null);
     try {
-      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
       const res = await fetch("/api/review-improve", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -531,7 +535,7 @@ export default function SopWorkspace() {
     setErrorDetail(null);
     try {
       const { text: redactedInstruction } = redactSecrets(instruction);
-      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values, variables));
+      const { text: redactedDocument } = redactSecrets(renderTemplate(template, values));
       const res = await fetch("/api/refine", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -670,23 +674,29 @@ export default function SopWorkspace() {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Un-parameterizes the field: every {{key}} occurrence in the template is
-  // replaced with its current literal value (or removed entirely if the
-  // field was left empty), then the variable itself is dropped. For fields
-  // that never should have been variables in the first place — a value only
-  // discovered live during the procedure (a serial number read off a
-  // device), which the generation prompt now tries to avoid creating a
-  // field for but won't always get right — this is the manual escape hatch.
-  function handleRemoveField(key: string) {
-    const raw = values[key];
-    const literal = raw === undefined || raw === null || raw === "" ? "" : String(raw);
-    setTemplate((prev) => unparameterize(prev, key, literal));
-    setVariables((prev) => prev.filter((v) => v.key !== key));
-    setValues((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+  // Removing a field used to be a purely mechanical local substitution
+  // (drop {{key}}, splice in its current literal value) — fast, but it
+  // left an awkward leftover value or a bare gap wherever the field was
+  // referenced, since nothing actually reworded the surrounding sentence.
+  // Routed through Refine instead: the AI removes the variable and
+  // rewrites every step that used it so the document reads naturally
+  // without it, same as any other edit instruction, just synthesized
+  // instead of typed. Slower (a real AI round trip) but the field is
+  // actually gone from the prose, not just gone from the form.
+  async function handleRemoveField(key: string) {
+    const variable = variables.find((v) => v.key === key);
+    setRemovingKey(key);
+    try {
+      await handleRefine(
+        `Remove the {{${key}}} variable ("${variable?.label ?? key}") entirely, and rewrite every sentence that referenced it as ` +
+          `genuinely natural prose that reads as if that value had never been a variable at all. Do not just strip the {{}} braces ` +
+          `and leave "${key}" sitting in the sentence as bare text, and do not replace it with a bracket like [${key}] — neither of ` +
+          `those is a reword, both are broken text. For example, a step reading "Enter the value: {{${key}}} and continue." should ` +
+          `become something like "Enter the value and continue." — a normal sentence with no braces, brackets, or "${key}" visible anywhere.`
+      );
+    } finally {
+      setRemovingKey(null);
+    }
   }
 
   function handleAddField(variable: SopVariable) {
@@ -726,11 +736,11 @@ export default function SopWorkspace() {
   }
 
   function handleCopy() {
-    void navigator.clipboard.writeText(renderTemplate(template, values, variables));
+    void navigator.clipboard.writeText(renderTemplate(template, values));
   }
 
   function handleExportMarkdown() {
-    const rendered = renderTemplate(template, values, variables);
+    const rendered = renderTemplate(template, values);
     const blob = new Blob([rendered], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -769,7 +779,7 @@ export default function SopWorkspace() {
     setExportingDocx(true);
     setError(null);
     try {
-      const rendered = renderTemplate(template, values, variables);
+      const rendered = renderTemplate(template, values);
       const blob = await markdownToDocxBlob(meta?.title || topic || "SOP", rendered);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -978,8 +988,10 @@ export default function SopWorkspace() {
                 variables={variables}
                 values={values}
                 onChange={handleVariableChange}
-                onRemove={handleRemoveField}
+                onRemove={(key) => void handleRemoveField(key)}
                 onHoverField={hoverHighlightEnabled ? setHoveredKey : undefined}
+                disabled={refining}
+                removingKey={removingKey}
               />
             </div>
           </div>

@@ -373,6 +373,43 @@ export async function markdownToDocxBlob(title: string, markdown: string): Promi
   const doc = new Document({
     title,
     styles: {
+      // Base document font (Arial) and spacing — headings get real space
+      // before them so sections read as visually distinct blocks instead
+      // of running together, and body paragraphs get a little space after
+      // so consecutive steps don't look glued to each other. Heading
+      // levels 1-3 cover this app's actual output (document title, then
+      // numbered "## N. Section" headings); 4-6 are set for completeness
+      // in case a hand-edited or imported document goes deeper.
+      default: {
+        document: {
+          run: { font: "Arial" },
+          paragraph: { spacing: { after: 200 } },
+        },
+        heading1: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 360, after: 160 } },
+        },
+        heading2: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 360, after: 160 } },
+        },
+        heading3: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 280, after: 120 } },
+        },
+        heading4: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 240, after: 120 } },
+        },
+        heading5: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 240, after: 120 } },
+        },
+        heading6: {
+          run: { font: "Arial", bold: true },
+          paragraph: { spacing: { before: 240, after: 120 } },
+        },
+      },
       characterStyles: [
         {
           id: INLINE_CODE_STYLE_ID,

@@ -23,14 +23,16 @@ export function remarkSubstituteVariables(values: VariableValues, variables: Sop
     const label = labelByKey.get(key);
     const isEmpty = !hasValue || raw === undefined || raw === null || raw === "";
 
-    // A declared key with a genuinely empty value (e.g. a unique identifier
-    // — serial number, specific device IP — that SOP_SYSTEM_PROMPT now
-    // deliberately leaves blank instead of inventing a plausible-looking
-    // fake one) used to render as literally nothing, an invisible gap with
-    // no indication anything was missing. `[Field Label]` makes it obvious
-    // this needs real input, reusing the same amber "needs attention"
-    // treatment as an unknown/undeclared {{key}}.
-    const substituted = !hasValue ? fullMatch : isEmpty ? `[${label ?? key}]` : String(raw);
+    // A declared key with a genuinely empty value stays as the literal
+    // {{key}} — many of these SOPs are reused across many different
+    // sites/devices, so an unfilled field is completely normal, not an
+    // error. An earlier version rendered it as `[Field Label]` inline in
+    // the sentence ("...at [Site Name]..."), which read like broken prose
+    // and showed up constantly for templates that stay mostly unfilled by
+    // design. The raw {{key}} reads unambiguously as a template slot
+    // instead, still marked with the same amber "needs attention" styling
+    // as an unknown/undeclared {{key}} so it's not literally invisible.
+    const substituted = isEmpty ? fullMatch : String(raw);
 
     return {
       type: "text",
