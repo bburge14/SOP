@@ -134,8 +134,15 @@ async function restartServer() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    // Restored (un-maximized) size only — the window actually opens
+    // maximized every launch (see ready-to-show below), reported live as
+    // a real usability problem: at this fixed 1280x860 on a normal-size
+    // display, the app's own two-pane layout didn't fit and the whole
+    // window grew a second, outer scrollbar on top of each pane's own
+    // internal one.
     width: 1280,
     height: 860,
+    show: false,
     title: "SOP Writer",
     // Only needed in dev — a packaged build already shows the right icon
     // from the installer/app bundle (electron-builder's `icon` config),
@@ -146,6 +153,14 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Maximize before the first paint (show: false above) rather than after
+  // — showing the smaller size first and then snapping to maximized would
+  // be a visible flash on every launch.
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.maximize();
+    mainWindow.show();
   });
 
   mainWindow.loadURL(`http://127.0.0.1:${serverPort}`);

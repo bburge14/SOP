@@ -267,6 +267,25 @@ function collectSyntaxRanges(view: EditorView): { lines: RawRange[]; marks: RawR
     });
   }
 
+  // A blank source line between a heading and its body text (or between
+  // two paragraphs) is normal, meaningful markdown — but CodeMirror
+  // renders it as one full line-height of literal empty space, where the
+  // old read-only preview turned the same blank line into a heading's
+  // small CSS margin (`.sop-prose h2 { mb-2 }`, ~8px) instead. Compressing
+  // it here instead of just shrinking line-height globally keeps actual
+  // text lines at a comfortable reading height while collapsing the
+  // "paragraph break" gaps much closer to what react-markdown produced —
+  // reported live as the live editor visibly needing more scrolling than
+  // the same document used to.
+  for (const { from, to } of view.visibleRanges) {
+    let pos = from;
+    while (pos <= to) {
+      const line = view.state.doc.lineAt(pos);
+      if (line.length === 0) addLineClass(line.number, "cm-sop-blank-line");
+      pos = line.to + 1;
+    }
+  }
+
   // Lezer's iterate() visits nodes in document order, so `marks` is
   // already non-decreasing by `from` — except same-start nested ranges
   // (e.g. StrongEmphasis and its own opening EmphasisMark both start at
@@ -323,8 +342,12 @@ const syntaxMarkPlugin = ViewPlugin.fromClass(
 
 const liveMarkdownTheme = EditorView.baseTheme({
   "&": { height: "100%" },
-  ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.7" },
+  ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.55" },
   ".cm-content": { padding: "1rem 1.5rem" },
+  // A blank line between two paragraphs/headings — see the blank-line
+  // detection in liveMarkdownExtensions.ts — collapsed to roughly a
+  // heading's old CSS margin instead of a full text line's height.
+  ".cm-sop-blank-line": { fontSize: "0.4em", lineHeight: "0.6" },
   ".cm-sop-marker": { opacity: "0.4" },
   ".cm-sop-h1": { fontSize: "1.5rem", fontWeight: "700" },
   ".cm-sop-h2": { fontSize: "1.25rem", fontWeight: "700" },
