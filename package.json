@@ -1,7 +1,7 @@
 {
   "name": "sop-writer",
   "productName": "SOP Writer",
-  "version": "0.2.33",
+  "version": "0.2.34",
   "description": "Generate parameterized Standard Operating Procedures with an LLM.",
   "author": "bburge14 <bradey.burge@gmail.com>",
   "private": true,
@@ -24,6 +24,14 @@
     "dist:mac": "npm run dist -- --mac"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
+    "@lezer/common": "^1.5.2",
+    "@lezer/highlight": "^1.2.3",
+    "@lezer/markdown": "^1.7.2",
     "docx": "^9.7.1",
     "electron-updater": "^6.8.9",
     "lucide-react": "^0.446.0",
