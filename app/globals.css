@@ -135,6 +135,21 @@ body {
   @apply bg-indigo-500/40 ring-1 ring-indigo-400/70;
 }
 
+/* #print-target (MarkdownPreview.tsx) is always mounted now, regardless of
+   which tab (Rendered/Source) is active, so Export PDF/print doesn't
+   depend on the live editor being the visible one — normally invisible
+   and zero-footprint via this class; the @media print block below
+   restores position/width/height/visibility on the SAME #print-target ID
+   selector, which wins over this class selector's hiding since an ID
+   always beats a class in specificity, regardless of source order. */
+.sop-print-only {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
 @media print {
   /* Without this, print/PDF output was the app's dark theme verbatim —
      white text on a black page. Reproduced live via a print-media

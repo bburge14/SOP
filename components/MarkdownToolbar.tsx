@@ -17,6 +17,7 @@ import {
   Strikethrough,
   Table2,
 } from "lucide-react";
+import type { EditorAdapter } from "@/components/LiveMarkdownEditor";
 
 interface EditResult {
   text: string;
@@ -25,31 +26,41 @@ interface EditResult {
 }
 
 interface MarkdownToolbarProps {
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  adapter: EditorAdapter;
   value: string;
   onChange: (next: string) => void;
 }
 
+/** Wraps a plain `<textarea>` ref in the same get/set-selection shape the live (CodeMirror) editor exposes, so one toolbar drives either. */
+export function textareaAdapter(textareaRef: RefObject<HTMLTextAreaElement | null>, fallbackLength: number): EditorAdapter {
+  return {
+    getSelection: () => ({
+      start: textareaRef.current?.selectionStart ?? fallbackLength,
+      end: textareaRef.current?.selectionEnd ?? fallbackLength,
+    }),
+    setSelection: (start, end) => textareaRef.current?.setSelectionRange(start, end),
+    focus: () => textareaRef.current?.focus(),
+  };
+}
+
 /**
- * Formatting toolbar for the Source (raw markdown) editor — click Bold
- * instead of typing "**", etc. Operates directly on the textarea's
- * selection rather than a rich-text document, so it stays a thin layer over
- * the existing markdown pipeline (no new document model, no separate
- * markdown<->rich-doc conversion to keep in sync).
+ * Formatting toolbar shared by both the Source (raw textarea) and Rendered
+ * (live CodeMirror) editors — click Bold instead of typing "**", etc.
+ * Operates through the `adapter`'s get/set-selection rather than reaching
+ * into a specific editor implementation, so the same buttons work for
+ * either without a second copy of this component.
  */
-export default function MarkdownToolbar({ textareaRef, value, onChange }: MarkdownToolbarProps) {
+export default function MarkdownToolbar({ adapter, value, onChange }: MarkdownToolbarProps) {
   function apply(edit: (text: string, start: number, end: number) => EditResult) {
-    const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? value.length;
-    const end = textarea?.selectionEnd ?? value.length;
+    const { start, end } = adapter.getSelection();
     const result = edit(value, start, end);
     onChange(result.text);
-    // The textarea is a controlled component — the DOM value only reflects
-    // `result.text` after React re-renders, so the selection can't be
-    // restored synchronously here.
+    // Both editors are controlled components — the new value only takes
+    // effect after React re-renders, so the selection can't be restored
+    // synchronously here.
     requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(result.selectionStart, result.selectionEnd);
+      adapter.focus();
+      adapter.setSelection(result.selectionStart, result.selectionEnd);
     });
   }
 

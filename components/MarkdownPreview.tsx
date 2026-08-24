@@ -7,7 +7,8 @@ import { Code2, Eye } from "lucide-react";
 import type { SopVariable, VariableValues } from "@/types/sop";
 import { remarkSubstituteVariables } from "@/lib/sop/remarkSubstituteVariables";
 import { remarkGithubAlerts } from "@/lib/sop/remarkGithubAlerts";
-import MarkdownToolbar from "@/components/MarkdownToolbar";
+import MarkdownToolbar, { textareaAdapter } from "@/components/MarkdownToolbar";
+import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "@/components/LiveMarkdownEditor";
 
 export type PreviewMode = "preview" | "source";
 
@@ -33,16 +34,17 @@ export default function MarkdownPreview({
   hoverHighlightEnabled,
 }: MarkdownPreviewProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const liveEditorRef = useRef<LiveMarkdownEditorHandle>(null);
 
   // Hover a field in the left pane -> highlight (and scroll to) its
-  // occurrence(s) in the rendered preview. The opposite direction (hover
-  // text in the preview -> see which field it is) needs no JS at all: the
-  // spans remark-substitute-variables produces carry their own `title`
-  // tooltip and a plain CSS :hover highlight (app/globals.css).
+  // occurrence(s) in the live editor. The opposite direction (hover text
+  // in the editor -> see which field it is) needs no JS at all: the spans
+  // both remark-substitute-variables and the live editor's variable-chip
+  // widget produce carry their own `title` tooltip and a plain CSS :hover
+  // highlight (app/globals.css) — same data-sop-var attribute either way.
   useEffect(() => {
     if (!hoveredKey || !hoverHighlightEnabled || mode !== "preview") return;
-    const container = previewRef.current;
+    const container = liveEditorRef.current?.getScrollElement();
     if (!container) return;
     const selector = `[data-sop-var="${CSS.escape(hoveredKey)}"]`;
     const matches = container.querySelectorAll<HTMLElement>(selector);
@@ -78,18 +80,47 @@ export default function MarkdownPreview({
         </TabButton>
       </div>
 
+      {/* Always mounted (not conditional on `mode`) so Export PDF/print
+          works regardless of which tab is showing — invisible/zero-size
+          in normal use, restored to a real visible page by the
+          #print-target rules in globals.css's @media print block, which
+          (being an ID selector) win over .sop-print-only's class-selector
+          hiding. This is the exact same read-only remark/react-markdown
+          render the app has always printed from; the live editor below is
+          a separate, editable surface over the same `template` string. */}
+      <div id="print-target" className="sop-print-only">
+        <div className="sop-prose">
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkGithubAlerts, remarkSubstituteVariables(values, variables)]}>
+            {template}
+          </ReactMarkdown>
+        </div>
+      </div>
+
       <div className="flex-1 min-h-0 bg-panel border border-border rounded-lg overflow-hidden flex flex-col">
         {mode === "preview" ? (
-          <div id="print-target" ref={previewRef} className="h-full overflow-y-auto p-6">
-            <div className="sop-prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkGithubAlerts, remarkSubstituteVariables(values, variables)]}>
-                {template}
-              </ReactMarkdown>
+          <div className="flex flex-col h-full p-2 pb-0">
+            <MarkdownToolbar
+              adapter={{
+                getSelection: () => liveEditorRef.current?.getSelection() ?? { start: 0, end: 0 },
+                setSelection: (s, e) => liveEditorRef.current?.setSelection(s, e),
+                focus: () => liveEditorRef.current?.focus(),
+              }}
+              value={template}
+              onChange={onTemplateChange}
+            />
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <LiveMarkdownEditor
+                ref={liveEditorRef}
+                value={template}
+                onChange={onTemplateChange}
+                values={values}
+                variables={variables}
+              />
             </div>
           </div>
         ) : (
           <div className="flex flex-col h-full p-2 pb-0">
-            <MarkdownToolbar textareaRef={textareaRef} value={template} onChange={onTemplateChange} />
+            <MarkdownToolbar adapter={textareaAdapter(textareaRef, template.length)} value={template} onChange={onTemplateChange} />
             <textarea
               ref={textareaRef}
               value={template}
