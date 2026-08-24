@@ -380,33 +380,46 @@ export async function markdownToDocxBlob(title: string, markdown: string): Promi
       // levels 1-3 cover this app's actual output (document title, then
       // numbered "## N. Section" headings); 4-6 are set for completeness
       // in case a hand-edited or imported document goes deeper.
+      // docx's own heading defaults (DefaultStylesFactory) bake in a
+      // `size`/`color` per level — e.g. Heading1 is `{ color: "2E74B5",
+      // size: 32 }` — that's what actually gives headings visual hierarchy
+      // in the exported file; the "Heading 1"/"Heading 2" style IDs alone
+      // don't imply a size. These per-level overrides get shallow-merged
+      // against that default at the `run`/`paragraph` key, not deep-merged
+      // property-by-property — providing `run: { font: "Arial" }` alone
+      // replaces the WHOLE default run object, silently dropping its size
+      // and color and leaving every heading the same size as body text.
+      // Reproduced live: a real export where "1. Purpose"/"2. Scope" came
+      // back bold but visually flat, indistinguishable in size from a
+      // normal paragraph. Fixed by re-stating each level's own default
+      // size/color explicitly alongside the Arial/spacing additions.
       default: {
         document: {
           run: { font: "Arial" },
           paragraph: { spacing: { after: 200 } },
         },
         heading1: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "2E74B5", size: 32 },
           paragraph: { spacing: { before: 360, after: 160 } },
         },
         heading2: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "2E74B5", size: 26 },
           paragraph: { spacing: { before: 360, after: 160 } },
         },
         heading3: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "1F4D78", size: 24 },
           paragraph: { spacing: { before: 280, after: 120 } },
         },
         heading4: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "2E74B5", italics: true },
           paragraph: { spacing: { before: 240, after: 120 } },
         },
         heading5: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "2E74B5" },
           paragraph: { spacing: { before: 240, after: 120 } },
         },
         heading6: {
-          run: { font: "Arial", bold: true },
+          run: { font: "Arial", bold: true, color: "1F4D78" },
           paragraph: { spacing: { before: 240, after: 120 } },
         },
       },
