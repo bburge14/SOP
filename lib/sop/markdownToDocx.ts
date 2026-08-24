@@ -27,6 +27,7 @@ import {
   BorderStyle,
   Packer,
   type IImageOptions,
+  type IRunOptions,
 } from "docx";
 
 const HEADING_LEVELS = [
@@ -41,6 +42,14 @@ const HEADING_LEVELS = [
 const MAX_IMAGE_WIDTH_PX = 550; // fits inside a Letter page's content area with 1" margins
 
 const CODE_SHADING = { type: ShadingType.CLEAR, fill: "F1F5F9", color: "auto" } as const;
+
+// Same amber "needs attention" treatment as the live preview's
+// .unbound-placeholder (and its @media print override in globals.css) —
+// exported files should flag an unfilled {{key}} the same way the app
+// itself does, not render it as plain, easy-to-miss text.
+const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g;
+const UNFILLED_PLACEHOLDER_SHADING = { type: ShadingType.CLEAR, fill: "FEF3C7", color: "auto" } as const;
+const UNFILLED_PLACEHOLDER_COLOR = "92400E";
 
 // Named Word styles (not just direct formatting) for inline code, code
 // blocks, and blockquotes. Word's direct formatting (a run's font/shading
@@ -152,6 +161,35 @@ interface MdNode {
   align?: (string | null)[];
 }
 
+/**
+ * Splits `value` on every {{key}} occurrence into plain runs (using
+ * `base`) plus distinctly-styled runs for the placeholder itself — mirrors
+ * remarkSubstituteVariables.ts's splitOnPlaceholders for the live preview,
+ * reimplemented here since this file walks its own lightweight MdNode tree.
+ * `renderTemplate` has already substituted every *filled* variable by the
+ * time this runs, so any {{key}} still present is genuinely unfilled —
+ * there's no values/variables lookup needed here, just the pattern itself.
+ */
+function splitPlaceholderRuns(value: string, base: Omit<IRunOptions, "text">): TextRun[] {
+  const runs: TextRun[] = [];
+  let lastIndex = 0;
+  PLACEHOLDER_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PLACEHOLDER_RE.exec(value))) {
+    if (match.index > lastIndex) {
+      runs.push(new TextRun({ ...base, text: value.slice(lastIndex, match.index) }));
+    }
+    runs.push(
+      new TextRun({ ...base, text: match[0], color: UNFILLED_PLACEHOLDER_COLOR, shading: UNFILLED_PLACEHOLDER_SHADING })
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < value.length || runs.length === 0) {
+    runs.push(new TextRun({ ...base, text: value.slice(lastIndex) }));
+  }
+  return runs;
+}
+
 async function convertInline(nodes: MdNode[], marks: { bold?: boolean; italic?: boolean } = {}): Promise<
   (TextRun | ImageRun | ExternalHyperlink)[]
 > {
@@ -159,7 +197,7 @@ async function convertInline(nodes: MdNode[], marks: { bold?: boolean; italic?: 
   for (const node of nodes) {
     switch (node.type) {
       case "text":
-        runs.push(new TextRun({ text: node.value || "", bold: marks.bold, italics: marks.italic }));
+        runs.push(...splitPlaceholderRuns(node.value || "", { bold: marks.bold, italics: marks.italic }));
         break;
       case "strong":
         runs.push(...(await convertInline(node.children || [], { ...marks, bold: true })));
@@ -169,8 +207,7 @@ async function convertInline(nodes: MdNode[], marks: { bold?: boolean; italic?: 
         break;
       case "inlineCode":
         runs.push(
-          new TextRun({
-            text: node.value || "",
+          ...splitPlaceholderRuns(node.value || "", {
             style: INLINE_CODE_STYLE_ID,
             font: "Courier New",
             shading: CODE_SHADING,
@@ -308,7 +345,7 @@ async function convertBlock(node: MdNode): Promise<(Paragraph | Table)[]> {
         (line) =>
           new Paragraph({
             style: CODE_BLOCK_STYLE_ID,
-            children: [new TextRun({ text: line || " ", font: "Courier New", shading: CODE_SHADING })],
+            children: splitPlaceholderRuns(line || " ", { font: "Courier New", shading: CODE_SHADING }),
           })
       );
     }
