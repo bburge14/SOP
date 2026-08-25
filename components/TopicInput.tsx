@@ -11,15 +11,17 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
+  Timer,
   Upload,
   X,
 } from "lucide-react";
 import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 import CategoryProfilePanel from "@/components/CategoryProfilePanel";
 import type { CategoryProfileDefault, ContextAttachment, SopIdea } from "@/types/sop";
+import type { DocumentType } from "@/lib/llm/prompt";
 
 interface TopicInputProps {
-  onSubmit: (topic: string, draftSteps?: string) => void;
+  onSubmit: (topic: string, draftSteps?: string, documentType?: DocumentType) => void;
   onStartGuided: (topic: string) => void;
   askingGuidedQuestions: boolean;
   onImport: (file: File) => void;
@@ -65,6 +67,7 @@ export default function TopicInput({
   onCategoryProfileSaved,
 }: TopicInputProps) {
   const [topic, setTopic] = useState(initialValue);
+  const [documentType, setDocumentType] = useState<DocumentType>("sop");
   const [advancedMode, setAdvancedMode] = useState(false);
   const [draftSteps, setDraftSteps] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +93,7 @@ export default function TopicInput({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!topic.trim() || loading) return;
-    onSubmit(topic.trim(), advancedMode ? draftSteps.trim() || undefined : undefined);
+    onSubmit(topic.trim(), advancedMode ? draftSteps.trim() || undefined : undefined, documentType);
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -106,21 +109,36 @@ export default function TopicInput({
 
   return (
     <div>
-      <div className="flex items-center gap-1 mb-2">
-        <SegmentButton active={!advancedMode} onClick={() => setAdvancedMode(false)}>
-          Simple
-        </SegmentButton>
-        <SegmentButton active={advancedMode} onClick={() => setAdvancedMode(true)}>
-          <SlidersHorizontal className="size-3" />
-          Advanced
-        </SegmentButton>
+      <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-1">
+          <SegmentButton active={documentType === "sop"} onClick={() => setDocumentType("sop")}>
+            SOP
+          </SegmentButton>
+          <SegmentButton active={documentType === "sla"} onClick={() => setDocumentType("sla")}>
+            <Timer className="size-3" />
+            SLA
+          </SegmentButton>
+        </div>
+        <div className="flex items-center gap-1">
+          <SegmentButton active={!advancedMode} onClick={() => setAdvancedMode(false)}>
+            Simple
+          </SegmentButton>
+          <SegmentButton active={advancedMode} onClick={() => setAdvancedMode(true)}>
+            <SlidersHorizontal className="size-3" />
+            Advanced
+          </SegmentButton>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder='e.g. "Cisco Catalyst 2960 initial VLAN configuration"'
+          placeholder={
+            documentType === "sla"
+              ? 'e.g. "After-hours support SLA for critical production outages"'
+              : 'e.g. "Cisco Catalyst 2960 initial VLAN configuration"'
+          }
           className="flex-1 bg-panel border border-border rounded-lg px-4 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
           disabled={loading}
         />
@@ -131,7 +149,7 @@ export default function TopicInput({
               value={category}
               onChange={(e) => onCategoryChange(e.target.value)}
               placeholder="Category (optional)"
-              title="Tell the AI what category this SOP belongs to — if you've saved a profile for it, its context and remembered defaults are used automatically"
+              title={`Tell the AI what category this ${documentType === "sla" ? "SLA" : "SOP"} belongs to — if you've saved a profile for it, its context and remembered defaults are used automatically`}
               className="w-40 bg-panel border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
               disabled={loading}
             />
@@ -211,7 +229,7 @@ export default function TopicInput({
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-          {loading ? "Generating…" : "Generate SOP"}
+          {loading ? "Generating…" : documentType === "sla" ? "Generate SLA" : "Generate SOP"}
         </button>
       </form>
 
@@ -219,7 +237,11 @@ export default function TopicInput({
         <textarea
           value={draftSteps}
           onChange={(e) => setDraftSteps(e.target.value)}
-          placeholder="Optional: paste your own draft steps here. The AI will treat this as the real raw material for the procedure — formalizing structure, interaction mode, bolded UI elements, and variables — instead of inventing generic content from just the topic above."
+          placeholder={
+            documentType === "sla"
+              ? "Optional: paste your own draft terms here — coverage hours, severity tiers, response/resolution targets, escalation contacts. The AI will treat this as the real raw material for the SLA instead of inventing generic terms from just the topic above."
+              : "Optional: paste your own draft steps here. The AI will treat this as the real raw material for the procedure — formalizing structure, interaction mode, bolded UI elements, and variables — instead of inventing generic content from just the topic above."
+          }
           rows={4}
           disabled={loading}
           className="w-full mt-2 bg-panel border border-border rounded-lg px-4 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 resize-y"

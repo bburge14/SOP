@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { getLlmAdapter } from "@/lib/llm";
-import { SOP_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/llm/prompt";
+import { SOP_SYSTEM_PROMPT, SLA_SYSTEM_PROMPT, buildUserPrompt, type DocumentType } from "@/lib/llm/prompt";
 import { extractAndParseJson } from "@/lib/sop/parseJson";
 import { validateAndReconcile } from "@/lib/sop/reconcile";
 import { sopJsonSchema } from "@/lib/llm/schema";
@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
   let categoryProfile: unknown;
   let clarifications: unknown;
   let draftSteps: unknown;
+  let documentType: unknown;
   try {
-    ({ topic, context, categoryProfile, clarifications, draftSteps } = await req.json());
+    ({ topic, context, categoryProfile, clarifications, draftSteps, documentType } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -51,11 +52,21 @@ export async function POST(req: NextRequest) {
   const validatedDraftSteps = validateDraftSteps(draftSteps);
   if (validatedDraftSteps instanceof NextResponse) return validatedDraftSteps;
 
+  const validatedDocumentType = validateDocumentType(documentType);
+  if (validatedDocumentType instanceof NextResponse) return validatedDocumentType;
+
   try {
     const adapter = getLlmAdapter();
     const raw = await adapter.generate(
-      SOP_SYSTEM_PROMPT,
-      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile, validatedClarifications, validatedDraftSteps),
+      validatedDocumentType === "sla" ? SLA_SYSTEM_PROMPT : SOP_SYSTEM_PROMPT,
+      buildUserPrompt(
+        topic,
+        contextAttachments,
+        validatedCategoryProfile,
+        validatedClarifications,
+        validatedDraftSteps,
+        validatedDocumentType
+      ),
       sopJsonSchema
     );
     const parsed = extractAndParseJson(raw);
@@ -191,6 +202,15 @@ function validateDraftSteps(draftSteps: unknown): string | undefined | NextRespo
     );
   }
   return draftSteps;
+}
+
+/** Returns the validated document type, "sop" if omitted, or a ready-to-return 400 response on bad input. */
+function validateDocumentType(documentType: unknown): DocumentType | NextResponse {
+  if (documentType === undefined || documentType === null) return "sop";
+  if (documentType !== "sop" && documentType !== "sla") {
+    return NextResponse.json({ error: '`documentType` must be "sop" or "sla".' }, { status: 400 });
+  }
+  return documentType;
 }
 
 function statusFor(err: unknown): number {

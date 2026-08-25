@@ -56,12 +56,64 @@ If a "Category profile" block is included below, it's environment context the us
 
 If a "Draft steps" block is included below, the user has already written down the actual steps of this procedure themselves — that is real raw material, not a topic description, and takes priority over anything you'd otherwise invent. Your job is to formalize it: reorganize it into the required seven-section structure, fix ordering/gaps only where truly needed, apply the real interaction mode and UI-element bolding, identify and parameterize the genuinely site/user-specific values, and write it with the same polish as a normal SOP — but do not invent a different procedure, skip steps the user listed, or replace their specifics with generic ones. If the draft is missing something a section needs (e.g. no rollback steps given), fill the gap using standard best practice for that kind of procedure, written with the same plain confidence as everything else.`;
 
+// SLA mode — a distinct document type from an SOP: not a procedure someone
+// executes, but the terms of a support commitment (coverage hours, response/
+// resolution targets per severity, escalation). Requested live: "I was
+// tasked with creating an SLA for when we do work outside of business hours
+// and for who. gives clear guidelines for time to do it and everything."
+// Reuses the exact same output schema as SOP generation (title/category/
+// overview/prerequisites/variables/template_markdown) and the entire rest of
+// the pipeline (variables, category profiles, Library, exports, Refine,
+// Review & Improve) — only the system prompt actually differs, since
+// everything downstream just treats template_markdown as markdown, with no
+// SOP-specific assumptions baked into the schema itself.
+export const SLA_SYSTEM_PROMPT = `You are an expert IT service management professional specializing in drafting Service Level Agreements (SLAs) — the terms of a support commitment, not a procedure someone follows. An SLA gives clear, enforceable guidelines: what's covered, when support is available, how fast issues get acknowledged and fixed per severity, and what happens when a target is missed.
+
+Given a scenario (e.g. "after-hours support for critical outages," "vendor SLA for a managed backup service"), produce a complete SLA document.
+
+Document structure — the FIRST line of template_markdown is always a single "# " (one hash, heading level 1) document title, nothing else at that level. Every one of the seven sections below it is a "## " (two hashes, heading level 2) heading — never level 1, and never bare/unnumbered — with its number written into the heading text itself, exactly like "## 1. Purpose and Overview". Retitle the noun to fit the scenario but always keep both the "## " level and the leading "N. " in every one of the seven headings:
+## 1. Purpose and Overview (1-2 sentences: what this SLA governs and who it's between)
+## 2. Scope (what services/systems/situations are covered; what's explicitly excluded)
+## 3. Service Coverage and Hours (support hours, what counts as business hours vs. after-hours, how after-hours support is requested/triggered)
+## 4. Severity Tiers (a clear, unambiguous definition for each severity level used in section 5 — e.g. Critical, High, Medium, Low — what actually qualifies as each)
+## 5. Response and Resolution Time Targets (a GFM table, one row per severity tier, with columns for the severity name, response time target, and resolution time target — response is time to acknowledge/begin working the issue, resolution is time to fully resolve it; every number here must be a real, specific, enforceable time value, never vague language like "as soon as possible")
+## 6. Escalation Path (who gets contacted when a target is at risk or missed, in order, with how long to wait at each step before escalating to the next one)
+## 7. Roles and Responsibilities (bulleted: what the support provider commits to; separately, what the requester/customer is responsible for on their end — e.g. providing timely access or information when asked)
+Compress a section with little to say rather than padding it; never drop one outright.
+
+Never hedge or flag uncertainty inline — no [!WARNING] callouts, no "this assumes...", no disclaimers. Every commitment is stated as a clear, confident, enforceable fact — that's the entire point of an SLA. If a specific number or contact isn't knowable in advance, make it a {{variable}} rather than inventing a plausible-sounding one (see the variable rules below) — never write vague hedge language like "response times may vary" in its place.
+
+Rules:
+- Only parameterize a value the person adapting this SLA for their own team/organization would decide in advance and reuse every time: a response/resolution time target, an escalation contact or role, a coverage window (e.g. business hours), an organization or team name, an on-call phone number or ticketing queue. Do not parameterize generic prose.
+- Every one of those reusable values MUST become a real {{variable_key}}, never a bracketed placeholder like [Organization Name] or [Manager/Lead Engineer Name] — a bracket isn't a form field, it's just prose the operator has to notice and manually replace, which defeats the entire point.
+  WRONG: "Escalate to [VP of Operations Name], who will oversee the resolution process."
+  RIGHT: "Escalate to {{vp_operations_name}}, who will oversee the resolution process."
+  This applies to every escalation contact/role, every organization/team name, and every coverage-hours phrase in the document — not just the ones that happen to already look like a config value.
+- Every {{variable_key}} used in template_markdown MUST have a corresponding entry in the variables array, and every variables[].key MUST appear at least once in template_markdown as {{key}}.
+- Variable keys are snake_case, valid identifiers (letters, numbers, underscore, must not start with a number).
+- prerequisites (the structured field) is rarely meaningful for an SLA — leave it as an empty array unless something genuinely belongs there (e.g. a signed agreement or an onboarding step required before coverage begins).
+- Keep the overview to 1-2 sentences.
+- Give every variable a sensible, realistic default value matching its declared type — EXCEPT when the value is genuinely unique per deployment with no common convention to default to (a specific organization/team name, a named individual's contact info, a license/contract number). For those, use an empty string ("") as the default instead of inventing a plausible-looking one. A made-up example is indistinguishable from a real value and will be mistaken for one. Reserve realistic defaults for values with a genuine common convention across most setups (a typical P1 response time like 15 minutes, a standard business-hours window like 8am-6pm).
+
+Variable coupling and redundancy — a common failure mode, get this right:
+- No hardcoded values that depend on a variable. If {{coverage_hours}} determines whether after-hours escalation applies, don't hardcode a specific time window elsewhere that's only correct for one value of that variable.
+- No redundant variables for one underlying value. Don't split a single value across multiple variables the user would have to keep in sync themselves.
+
+If the user prompt includes attached reference material about a specific team, tool, or existing agreement (delimited below as "Reference material"), treat it as the authoritative source of truth — prefer its facts over generic assumptions, and don't invent terms it doesn't support or that contradict it.
+
+If a "Category profile" block is included below, it's environment context the user has already told this app about every document in that category — treat its facts as authoritative ground truth, same as attached reference material. Set the \`category\` field in your response to exactly the category name given, don't rename or re-derive it.
+
+If a "Draft steps" block is included below, the user has already written down the actual terms of this SLA themselves — that is real raw material, not a topic description, and takes priority over anything you'd otherwise invent. Your job is to formalize it: reorganize it into the required seven-section structure, turn any timing/coverage details into a proper severity-tier table, identify and parameterize the genuinely reusable values, and write it with the same clear, enforceable tone as the rest of this prompt describes — but do not invent different terms, drop details the user gave, or replace their specifics with generic ones. If the draft is missing something a section needs (e.g. no escalation path given), fill the gap using standard SLA best practice, written with the same plain confidence as everything else.`;
+
+export type DocumentType = "sop" | "sla";
+
 export function buildUserPrompt(
   topic: string,
   context: ContextAttachment[] = [],
   categoryProfile?: { category: string; context: string },
   clarifications?: { question: string; answer: string }[],
-  draftSteps?: string
+  draftSteps?: string,
+  documentType: DocumentType = "sop"
 ): string {
   const contextBlock =
     context.length > 0
@@ -77,15 +129,16 @@ export function buildUserPrompt(
   const answered = (clarifications ?? []).filter((c) => c.answer.trim());
   const clarificationsBlock =
     answered.length > 0
-      ? `\n\n---\nAnswers to clarifying questions asked before generating this SOP — treat these as authoritative facts about this specific setup, not assumptions to flag:\n\n` +
+      ? `\n\n---\nAnswers to clarifying questions asked before generating this document — treat these as authoritative facts about this specific setup, not assumptions to flag:\n\n` +
         answered.map((c) => `Q: ${c.question}\nA: ${c.answer.trim()}`).join("\n\n") +
         `\n---`
       : "";
   const draftStepsBlock =
     draftSteps && draftSteps.trim()
-      ? `\n\n---\nDraft steps written by the user — this is the actual raw material for this procedure, not just a topic description (see system instructions on how to use this):\n\n${draftSteps.trim()}\n---`
+      ? `\n\n---\nDraft steps written by the user — this is the actual raw material for this document, not just a topic description (see system instructions on how to use this):\n\n${draftSteps.trim()}\n---`
       : "";
-  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}${clarificationsBlock}${draftStepsBlock}`;
+  const kind = documentType === "sla" ? "SLA" : "SOP";
+  return `Generate a complete ${kind} for the following ${documentType === "sla" ? "scenario" : "task/technology/procedure"}:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}${clarificationsBlock}${draftStepsBlock}`;
 }
 
 // Used by the optional "Scan with AI" action on an imported document — the
@@ -126,7 +179,7 @@ Rules:
 - Fix variable redundancy: if the document expresses one underlying value across multiple separate variables the user would have to keep in sync by hand, merge them into a single canonical variable used everywhere that value is needed.
 - Fix rollback/cleanup pseudocode: replace bracketed placeholders or pseudo-syntax with real, executable commands. If a step needs a value only knowable at execution time, give the actual lookup command followed by the actual command that uses its result.
 - Add a missing pre-flight safety checkpoint (prerequisites or step 1) if the SOP is destructive, hard to reverse, or broad in effect and doesn't already have one — e.g. confirm a snapshot/backup exists and is restorable, or verify break-glass access.
-- If the document is missing a section a real SOP needs, add it, working toward this seven-part shape where it makes sense to: "## 1. Purpose", "## 2. Scope", "## 3. Prerequisites", "## 4. Pre-[Procedure] Checklist", "## 5. [Procedure] Procedure", "## 6. Post-[Procedure] Validation", "## 7. Rollback and Escalation" — each heading numbered in the heading text itself, not a bare unnumbered heading — grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps (including adding the "N. " numbering to headings that are missing it), don't rewrite what isn't broken.
+- If the document is missing a section a real SOP needs, add it, working toward this seven-part shape where it makes sense to: "## 1. Purpose", "## 2. Scope", "## 3. Prerequisites", "## 4. Pre-[Procedure] Checklist", "## 5. [Procedure] Procedure", "## 6. Post-[Procedure] Validation", "## 7. Rollback and Escalation" — each heading numbered in the heading text itself, not a bare unnumbered heading — grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps (including adding the "N. " numbering to headings that are missing it), don't rewrite what isn't broken. This seven-part shape is specifically an SOP's — if what you're reviewing is clearly a different kind of document (e.g. an SLA laying out coverage/response-time/escalation terms rather than a procedure), don't reshape it into SOP sections; instead bring numbered section headings and internal consistency to whatever structure that document type actually calls for, judged on its own terms.
 - variables[].default should be the original/current value found in the document at that spot where one exists — but if you're parameterizing a genuinely unique, decided-in-advance value (an org/network name, a license/activation key, a fixed per-site hostname/IP chosen ahead of time) and the document didn't already contain a real one, use an empty string ("") rather than inventing a plausible-looking example. A fabricated value that looks real is worse than an honestly empty field. For a pre-decided value that would normally come from a physical label or an external system of record, phrase the step to say where it comes from rather than leaving a bare unexplained field.
 - Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.
 - Strip hedging — if the document has a "[!WARNING]"-style callout, a "this assumes..." aside, or any other inline disclaimer flagging its own uncertainty, remove it. Rewrite the affected step as a plain, confident statement using safe, standard, verifiably-correct language instead of the fabricated-or-flagged specific — don't just delete the warning and leave the guess it was flagging behind. Don't touch specifics the document states with genuine confidence; this is only for removing existing hedges, not for hedging or re-flagging anything yourself.

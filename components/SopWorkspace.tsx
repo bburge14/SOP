@@ -23,6 +23,7 @@ import { redactSecrets } from "@/lib/sop/redactSecrets";
 import { listSavedSops, saveSopToLibrary } from "@/lib/sop/library";
 import { getCategoryProfile, listCategoryProfiles } from "@/lib/sop/categoryProfiles";
 import { PRESET_CATEGORIES } from "@/lib/sop/presetCategories";
+import type { DocumentType } from "@/lib/llm/prompt";
 import type {
   CategoryProfileDefault,
   ClarifyingQuestion,
@@ -184,7 +185,8 @@ export default function SopWorkspace() {
   async function generate(
     newTopic: string,
     clarifications?: { question: string; answer: string }[],
-    draftSteps?: string
+    draftSteps?: string,
+    documentType?: DocumentType
   ) {
     setLoading(true);
     setError(null);
@@ -206,6 +208,7 @@ export default function SopWorkspace() {
           categoryProfile: trimmedCategory ? { category: trimmedCategory, context: profile?.context ?? "" } : undefined,
           clarifications: redactedClarifications,
           draftSteps: redactedDraftSteps,
+          documentType,
         }),
       });
       const data = await res.json();
@@ -967,7 +970,7 @@ export default function SopWorkspace() {
       />
 
       <TopicInput
-        onSubmit={(t, draftSteps) => void generate(t, undefined, draftSteps)}
+        onSubmit={(t, draftSteps, documentType) => void generate(t, undefined, draftSteps, documentType)}
         onStartGuided={(t) => void handleStartGuided(t)}
         askingGuidedQuestions={askingGuidedQuestions}
         onImport={(f) => void handleImport(f)}
