@@ -610,6 +610,16 @@ export default function SopWorkspace() {
   // every field required, which can reject a legitimately broad edit —
   // but that's the safer failure mode: worst case you retype the
   // instruction to be more specific, instead of silently losing fields).
+  //
+  // Reported again after that: the guard was correctly catching the
+  // overshoot, but purely as an after-the-fact reject-and-retry — the user
+  // wanted the AI to actually stop overshooting, not just get blocked
+  // every time it did. The same computed list is now ALSO sent to the AI
+  // itself as an explicit "these must come back unchanged" constraint
+  // (`protectedKeys` below, `buildRefinePrompt` in lib/llm/prompt.ts) —
+  // telling it upfront instead of only checking after, so a well-behaved
+  // response is more likely to begin with, not just correctly rejected
+  // when it isn't.
   async function handleRefine(instruction: string, requiredKeys?: string[]) {
     const effectiveRequiredKeys =
       requiredKeys ??
@@ -628,7 +638,16 @@ export default function SopWorkspace() {
       const res = await fetch("/api/refine", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ document: redactedDocument, instructions: refineHistory, newInstruction: redactedInstruction }),
+        body: JSON.stringify({
+          document: redactedDocument,
+          instructions: refineHistory,
+          newInstruction: redactedInstruction,
+          // Told upfront, not just checked after the fact (see the
+          // requiredKeys guard below) — this is meant to stop the AI from
+          // touching fields the instruction never mentioned in the first
+          // place, not just catch it once it already has.
+          protectedKeys: effectiveRequiredKeys,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

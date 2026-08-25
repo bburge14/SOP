@@ -200,6 +200,11 @@ export function buildReviewImprovePrompt(document: string): string {
 // adapter/provider-specific multi-turn plumbing.
 export const REFINE_SYSTEM_PROMPT = `You are iteratively revising an existing SOP based on a user's specific instructions, one at a time, as part of an ongoing editing session — not authoring a new document and not doing a general quality pass.
 
+THE SINGLE MOST IMPORTANT RULE: you are editing, not rewriting. You are given the full current document and must return the full document again — but treat every part of it you weren't explicitly asked to change as text to copy forward byte-for-byte, not text to rephrase, "improve," reformat, or regenerate from your own understanding of the topic. A one-sentence instruction should typically change one sentence (plus whatever else it makes inconsistent, per the rule below) — if you find yourself rewriting a step, a section, or a variable the instruction never mentioned, stop and put it back exactly as it was in the input.
+  WRONG: given a 12-variable SLA and the instruction "change Tier 1 response time to 15 minutes," returning a document where several other severity tiers, contacts, or coverage-hours variables have also been reworded, renamed, or dropped.
+  RIGHT: the exact same document, with only the Tier 1 response time value (and, per the consistency rule below, anywhere else that specific value is referenced) actually changed — everything else identical to the input, including variable keys, wording, and section order.
+This matters most on a long or heavily-parameterized document (many variables, many sections) — the more there is to copy forward, the more tempting it is to regenerate instead, and the more damage a regeneration does.
+
 Rules:
 - Apply ONLY the new instruction given below. Don't undo, re-litigate, or second-guess earlier instructions unless the new one explicitly asks you to change something already done.
 - Preserve everything the instruction doesn't touch — wording, structure, other steps, other variables — exactly as given in the current document.
@@ -214,13 +219,34 @@ Rules:
   The result must read exactly like a sentence a person would actually write, as if that value had never been a variable at all.
   Critically, this applies to that ONE named variable only — every other {{variable}} in the document, and its entry in variables[], must come back completely unchanged: same key, same braces, same surrounding wording. Removing one variable is never a reason to touch, reword, or drop any other one, even if several variables appear in the same sentence or nearby steps.`;
 
-export function buildRefinePrompt(document: string, priorInstructions: string[], newInstruction: string): string {
+export function buildRefinePrompt(
+  document: string,
+  priorInstructions: string[],
+  newInstruction: string,
+  protectedKeys: string[] = []
+): string {
   const historyBlock =
     priorInstructions.length > 0
       ? `\n\nInstructions already applied earlier in this session, in order (the document below already reflects all of them):\n` +
         priorInstructions.map((instr, i) => `${i + 1}. ${instr}`).join("\n")
       : "";
-  return `Here is the current SOP document:\n\n${document.trim()}${historyBlock}\n\nNew instruction to apply now:\n${newInstruction.trim()}`;
+  // Computed client-side from which variables the instruction's own text
+  // actually names — not a guess, a hard constraint: told upfront instead
+  // of only discovered after the fact, this is meant to stop the
+  // "rewrote/dropped fields nobody asked about" failure before it happens,
+  // not just catch it once it already has.
+  // Placed AFTER the instruction, not between the document and it — tested
+  // live and reproduced a real failure with that placement: a small local
+  // model read a "---"-delimited block sitting right after the document as
+  // part of the document itself, and echoed it verbatim into its response.
+  // Phrased as a parenthetical reminder attached to the instruction, with
+  // an explicit "don't include this in your output" line, instead of a
+  // document-shaped block of its own.
+  const protectedKeysBlock =
+    protectedKeys.length > 0
+      ? `\n\n(Reminder, not part of the document and not to be included anywhere in your output: the following variables are not mentioned by this instruction and must come back completely unchanged — same {{key}}, same default, same label, at every occurrence: ${protectedKeys.map((k) => `{{${k}}}`).join(", ")}.)`
+      : "";
+  return `Here is the current SOP document:\n\n${document.trim()}${historyBlock}\n\nNew instruction to apply now:\n${newInstruction.trim()}${protectedKeysBlock}`;
 }
 
 // Used by "Suggest Ideas" — the user has attached documentation/manuals for

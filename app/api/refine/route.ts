@@ -17,13 +17,15 @@ export const dynamic = "force-dynamic";
 const MAX_DOCUMENT_LENGTH = 60_000;
 const MAX_INSTRUCTION_LENGTH = 2000;
 const MAX_INSTRUCTIONS = 20;
+const MAX_PROTECTED_KEYS = 200;
 
 export async function POST(req: NextRequest) {
   let document: unknown;
   let instructions: unknown;
   let newInstruction: unknown;
+  let protectedKeys: unknown;
   try {
-    ({ document, instructions, newInstruction } = await req.json());
+    ({ document, instructions, newInstruction, protectedKeys } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -51,11 +53,14 @@ export async function POST(req: NextRequest) {
   const validatedInstructions = validateInstructions(instructions);
   if (validatedInstructions instanceof NextResponse) return validatedInstructions;
 
+  const validatedProtectedKeys = validateProtectedKeys(protectedKeys);
+  if (validatedProtectedKeys instanceof NextResponse) return validatedProtectedKeys;
+
   try {
     const adapter = getLlmAdapter();
     const raw = await adapter.generate(
       REFINE_SYSTEM_PROMPT,
-      buildRefinePrompt(document, validatedInstructions, newInstruction),
+      buildRefinePrompt(document, validatedInstructions, newInstruction, validatedProtectedKeys),
       sopJsonSchema
     );
     const parsed = extractAndParseJson(raw);
@@ -78,6 +83,15 @@ function validateInstructions(instructions: unknown): string[] | NextResponse {
   // refine session should keep working, just with older instructions
   // dropped from context (the document itself already reflects them).
   return (instructions as string[]).slice(-MAX_INSTRUCTIONS);
+}
+
+/** Returns the validated protected-key list ([] if omitted), or a ready-to-return 400 response on bad input. */
+function validateProtectedKeys(protectedKeys: unknown): string[] | NextResponse {
+  if (protectedKeys === undefined || protectedKeys === null) return [];
+  if (!Array.isArray(protectedKeys) || !protectedKeys.every((k) => typeof k === "string")) {
+    return NextResponse.json({ error: "`protectedKeys` must be an array of strings." }, { status: 400 });
+  }
+  return (protectedKeys as string[]).slice(0, MAX_PROTECTED_KEYS);
 }
 
 function statusFor(err: unknown): number {
