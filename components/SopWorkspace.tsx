@@ -796,6 +796,35 @@ export default function SopWorkspace() {
     });
   }
 
+  // "Split fields" — decoupling ONE specific {{key}} occurrence (identified
+  // by its document offset, from SplitOccurrencePopover/liveMarkdownExtensions'
+  // onOccurrenceClick) from the rest of that variable's occurrences, without
+  // touching anything else in the document. Requested live after a report
+  // that some SOPs reuse one field's key at several points that should
+  // really vary independently per run — e.g. the same {{contact_email}} key
+  // used for two genuinely different contacts that happened to share a
+  // default when the AI generated it.
+  function handleReassignOccurrence(from: number, to: number, targetKey: string) {
+    // The popover that calls this closes itself on any template change
+    // between opening and confirming, so `from`/`to` should always still be
+    // valid here — this is just a cheap belt-and-suspenders check, not
+    // expected to ever actually trip.
+    if (!/^\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}$/.test(template.slice(from, to))) return;
+    setTemplate(template.slice(0, from) + `{{${targetKey}}}` + template.slice(to));
+  }
+
+  function handleCreateFieldFromOccurrence(from: number, to: number, originalKey: string, newKey: string, newLabel: string) {
+    if (!/^\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}$/.test(template.slice(from, to))) return;
+    const original = variables.find((v) => v.key === originalKey);
+    const currentValue = values[originalKey] ?? original?.default ?? "";
+    setTemplate(template.slice(0, from) + `{{${newKey}}}` + template.slice(to));
+    setVariables((prev) => [
+      ...prev,
+      { key: newKey, label: newLabel, description: original?.description ?? "", default: currentValue, type: original?.type ?? "string" },
+    ]);
+    setValues((prev) => ({ ...prev, [newKey]: currentValue }));
+  }
+
   function handleCopy() {
     void navigator.clipboard.writeText(renderTemplate(template, values));
   }
@@ -1092,6 +1121,8 @@ export default function SopWorkspace() {
               hoverHighlightEnabled={hoverHighlightEnabled}
               activeNavKey={activeNav?.key ?? null}
               activeNavIndex={activeNav?.index ?? 0}
+              onReassignOccurrence={handleReassignOccurrence}
+              onCreateFieldFromOccurrence={handleCreateFieldFromOccurrence}
             />
           </div>
         </div>

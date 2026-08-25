@@ -24,6 +24,7 @@ interface LiveMarkdownEditorProps {
   values: VariableValues;
   variables: SopVariable[];
   onHoverField?: (key: string | null) => void;
+  onOccurrenceClick?: (info: { key: string; from: number; to: number; rect: DOMRect }) => void;
 }
 
 /**
@@ -35,7 +36,7 @@ interface LiveMarkdownEditorProps {
  * textarea; `values`/`variables` drive what each {{key}} chip displays.
  */
 const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEditorProps>(function LiveMarkdownEditor(
-  { value, onChange, values, variables, onHoverField },
+  { value, onChange, values, variables, onHoverField, onOccurrenceClick },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,8 +89,8 @@ const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEdit
   }, [value]);
 
   useEffect(() => {
-    viewRef.current?.dispatch({ effects: setLiveVariablesEffect.of({ values, variables, onHoverField }) });
-  }, [values, variables, onHoverField]);
+    viewRef.current?.dispatch({ effects: setLiveVariablesEffect.of({ values, variables, onHoverField, onOccurrenceClick }) });
+  }, [values, variables, onHoverField, onOccurrenceClick]);
 
   useImperativeHandle(
     ref,

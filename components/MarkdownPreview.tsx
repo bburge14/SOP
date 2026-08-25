@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Code2, Eye } from "lucide-react";
@@ -9,6 +9,7 @@ import { remarkSubstituteVariables } from "@/lib/sop/remarkSubstituteVariables";
 import { remarkGithubAlerts } from "@/lib/sop/remarkGithubAlerts";
 import MarkdownToolbar, { textareaAdapter } from "@/components/MarkdownToolbar";
 import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "@/components/LiveMarkdownEditor";
+import SplitOccurrencePopover from "@/components/SplitOccurrencePopover";
 
 export type PreviewMode = "preview" | "source";
 
@@ -25,6 +26,10 @@ interface MarkdownPreviewProps {
   activeNavKey: string | null;
   /** 0-based index into that field's occurrences to scroll to and highlight. */
   activeNavIndex: number;
+  /** Point one specific {{key}} occurrence (by document offset) at a different, already-existing field. */
+  onReassignOccurrence: (from: number, to: number, targetKey: string) => void;
+  /** Split one specific {{key}} occurrence off into a brand-new field, seeded with the original's current value. */
+  onCreateFieldFromOccurrence: (from: number, to: number, originalKey: string, newKey: string, newLabel: string) => void;
 }
 
 export default function MarkdownPreview({
@@ -38,9 +43,16 @@ export default function MarkdownPreview({
   hoverHighlightEnabled,
   activeNavKey,
   activeNavIndex,
+  onReassignOccurrence,
+  onCreateFieldFromOccurrence,
 }: MarkdownPreviewProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveEditorRef = useRef<LiveMarkdownEditorHandle>(null);
+  const [splitTarget, setSplitTarget] = useState<{ key: string; from: number; to: number; rect: DOMRect } | null>(null);
+  // Any document change (typing, Refine, Regenerate, Import, a sibling
+  // split action applying) invalidates the from/to offsets this popover
+  // was opened with — close it rather than risk applying a stale range.
+  useEffect(() => setSplitTarget(null), [template]);
 
   // Hover a field in the left pane -> highlight (and scroll to) its
   // occurrence(s) in the live editor. The opposite direction (hover text
@@ -143,8 +155,27 @@ export default function MarkdownPreview({
                 onChange={onTemplateChange}
                 values={values}
                 variables={variables}
+                onOccurrenceClick={setSplitTarget}
               />
             </div>
+            {splitTarget && (
+              <SplitOccurrencePopover
+                anchorRect={splitTarget.rect}
+                originalKey={splitTarget.key}
+                originalLabel={variables.find((v) => v.key === splitTarget.key)?.label ?? splitTarget.key}
+                otherVariables={variables.filter((v) => v.key !== splitTarget.key)}
+                existingKeys={new Set(variables.map((v) => v.key))}
+                onClose={() => setSplitTarget(null)}
+                onReassign={(targetKey) => {
+                  onReassignOccurrence(splitTarget.from, splitTarget.to, targetKey);
+                  setSplitTarget(null);
+                }}
+                onCreateNew={(newKey, newLabel) => {
+                  onCreateFieldFromOccurrence(splitTarget.from, splitTarget.to, splitTarget.key, newKey, newLabel);
+                  setSplitTarget(null);
+                }}
+              />
+            )}
           </div>
         ) : (
           <div className="flex flex-col h-full p-2 pb-0">

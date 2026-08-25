@@ -40,6 +40,8 @@ export interface LiveVariablesConfig {
   values: VariableValues;
   variables: SopVariable[];
   onHoverField?: (key: string | null) => void;
+  /** Fired when a {{key}} chip is clicked — lets the app offer reassigning or splitting off just THIS occurrence, since a chip is atomic (not editable in place) and had no other click behavior to conflict with. */
+  onOccurrenceClick?: (info: { key: string; from: number; to: number; rect: DOMRect }) => void;
 }
 
 /** Dispatched whenever `values`/`variables`/the hover callback change — lets the chips update without touching document content or selection. */
@@ -68,23 +70,58 @@ class VariableChipWidget extends WidgetType {
     readonly label: string,
     readonly display: string,
     readonly isEmpty: boolean,
-    readonly onHoverField?: (key: string | null) => void
+    readonly from: number,
+    readonly to: number,
+    readonly onHoverField?: (key: string | null) => void,
+    readonly onOccurrenceClick?: (info: { key: string; from: number; to: number; rect: DOMRect }) => void
   ) {
     super();
   }
+  // Callback identity matters here, not just the visible fields: on first
+  // mount the editor paints once with liveVariablesField's empty default
+  // (no callbacks) before the resync effect dispatches the real ones a
+  // moment later — if eq() only compared display fields, that transition
+  // would look like "no change" and CodeMirror would keep reusing the
+  // very first DOM node, which was built with no listeners attached at
+  // all, permanently. React state setters (what these callbacks actually
+  // are, in practice) keep a stable identity across re-renders, so this
+  // still reuses the DOM normally on every later decoration rebuild —
+  // it only forces one real re-render at the mount->resync transition.
   eq(other: VariableChipWidget): boolean {
-    return this.key === other.key && this.display === other.display && this.isEmpty === other.isEmpty;
+    return (
+      this.key === other.key &&
+      this.display === other.display &&
+      this.isEmpty === other.isEmpty &&
+      this.from === other.from &&
+      this.to === other.to &&
+      this.onHoverField === other.onHoverField &&
+      this.onOccurrenceClick === other.onOccurrenceClick
+    );
   }
   toDOM(): HTMLElement {
     const span = document.createElement("span");
     span.textContent = this.display;
     span.className = "sop-var-value" + (this.isEmpty ? " unbound-placeholder" : "");
     span.setAttribute("data-sop-var", this.key);
-    span.title = `Field: ${this.label}`;
+    span.title = `Field: ${this.label} — click to reassign or split off just this occurrence`;
     if (this.onHoverField) {
       const onHoverField = this.onHoverField;
       span.addEventListener("mouseenter", () => onHoverField(this.key));
       span.addEventListener("mouseleave", () => onHoverField(null));
+    }
+    if (this.onOccurrenceClick) {
+      const onOccurrenceClick = this.onOccurrenceClick;
+      const key = this.key;
+      const from = this.from;
+      const to = this.to;
+      span.addEventListener("mousedown", (e) => {
+        // Chips are atomic/non-editable already, so there's no cursor
+        // placement to preserve here — but still stop the click from
+        // reaching CodeMirror's own selection handling underneath.
+        e.preventDefault();
+        e.stopPropagation();
+        onOccurrenceClick({ key, from, to, rect: span.getBoundingClientRect() });
+      });
     }
     return span;
   }
@@ -96,7 +133,7 @@ class VariableChipWidget extends WidgetType {
 }
 
 function variableDecorations(view: EditorView): DecorationSet {
-  const { values, variables, onHoverField } = view.state.field(liveVariablesField);
+  const { values, variables, onHoverField, onOccurrenceClick } = view.state.field(liveVariablesField);
   const labelByKey = new Map(variables.map((v) => [v.key, v.label]));
   const builder = new RangeSetBuilder<Decoration>();
   for (const { from, to } of view.visibleRanges) {
@@ -115,7 +152,9 @@ function variableDecorations(view: EditorView): DecorationSet {
       builder.add(
         start,
         end,
-        Decoration.replace({ widget: new VariableChipWidget(key, label, display, isEmpty, onHoverField) })
+        Decoration.replace({
+          widget: new VariableChipWidget(key, label, display, isEmpty, start, end, onHoverField, onOccurrenceClick),
+        })
       );
     }
   }
