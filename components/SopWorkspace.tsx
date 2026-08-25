@@ -595,7 +595,30 @@ export default function SopWorkspace() {
   // When the caller can name the exact keys that must survive, checking
   // for them here turns that into a rejected response with an error
   // instead of silent data loss.
+  //
+  // If the caller doesn't pass one explicitly (the common case — every
+  // free-text instruction typed into RefinePanel), it's computed here: any
+  // currently-declared field whose key or label doesn't appear anywhere in
+  // the instruction text is assumed to be untouched by it, and required to
+  // survive. Reported live a second time, through this exact path — "I did
+  // the ai edit for an sla and it literally got rid of my variables" — the
+  // earlier fix only covered the dedicated Remove-field button, which
+  // always knew the full required-keys list explicitly; a general typed
+  // instruction like "change the P1 response time to 10 minutes" never
+  // named the other fields at all, so it had no protection whatsoever.
+  // This heuristic isn't perfect (a vague instruction naming nothing marks
+  // every field required, which can reject a legitimately broad edit —
+  // but that's the safer failure mode: worst case you retype the
+  // instruction to be more specific, instead of silently losing fields).
   async function handleRefine(instruction: string, requiredKeys?: string[]) {
+    const effectiveRequiredKeys =
+      requiredKeys ??
+      variables
+        .filter((v) => {
+          const lowerInstruction = instruction.toLowerCase();
+          return !lowerInstruction.includes(v.key.toLowerCase()) && !lowerInstruction.includes(v.label.toLowerCase());
+        })
+        .map((v) => v.key);
     setRefining(true);
     setError(null);
     setErrorDetail(null);
@@ -623,12 +646,12 @@ export default function SopWorkspace() {
         template_markdown: string;
       };
 
-      if (requiredKeys && requiredKeys.length > 0) {
+      if (effectiveRequiredKeys.length > 0) {
         const returnedKeys = new Set(sop.variables.map((v) => v.key));
-        const dropped = requiredKeys.filter((k) => !returnedKeys.has(k));
+        const dropped = effectiveRequiredKeys.filter((k) => !returnedKeys.has(k));
         if (dropped.length > 0) {
           setError(
-            `The AI's response also dropped ${dropped.length === 1 ? "another field" : "other fields"} it wasn't asked to touch (${dropped.join(", ")}), so nothing was changed. Try again, or edit the document manually instead.`
+            `The AI's response also dropped ${dropped.length === 1 ? "a field" : "fields"} it wasn't asked to touch (${dropped.join(", ")}), so nothing was changed. Try a more specific instruction, or edit the document manually instead.`
           );
           return;
         }
