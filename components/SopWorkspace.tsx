@@ -561,7 +561,20 @@ export default function SopWorkspace() {
     }
   }
 
-  async function handleRefine(instruction: string) {
+  // `requiredKeys`, when given, is the set of variable keys the caller
+  // knows for certain should survive this specific edit untouched (e.g.
+  // "every field except the one being removed"). Refine is a free-text
+  // instruction and the model occasionally overshoots — instead of
+  // rewriting one referenced sentence, it regenerates the whole document
+  // and silently drops other {{key}} occurrences along the way. Nothing in
+  // `validateAndReconcile` catches that (it only checks internal
+  // consistency of the model's own response, not against what existed
+  // before the call), so an overshoot like that used to apply silently —
+  // reported live as "I deleted one field and it deleted all of them."
+  // When the caller can name the exact keys that must survive, checking
+  // for them here turns that into a rejected response with an error
+  // instead of silent data loss.
+  async function handleRefine(instruction: string, requiredKeys?: string[]) {
     setRefining(true);
     setError(null);
     setErrorDetail(null);
@@ -588,6 +601,17 @@ export default function SopWorkspace() {
         variables: SopVariable[];
         template_markdown: string;
       };
+
+      if (requiredKeys && requiredKeys.length > 0) {
+        const returnedKeys = new Set(sop.variables.map((v) => v.key));
+        const dropped = requiredKeys.filter((k) => !returnedKeys.has(k));
+        if (dropped.length > 0) {
+          setError(
+            `The AI's response also dropped ${dropped.length === 1 ? "another field" : "other fields"} it wasn't asked to touch (${dropped.join(", ")}), so nothing was changed. Try again, or edit the document manually instead.`
+          );
+          return;
+        }
+      }
 
       setMeta({ title: sop.title, category: sop.category, overview: sop.overview, prerequisites: sop.prerequisites });
       setCategory(sop.category);
@@ -717,14 +741,19 @@ export default function SopWorkspace() {
   // actually gone from the prose, not just gone from the form.
   async function handleRemoveField(key: string) {
     const variable = variables.find((v) => v.key === key);
+    const otherKeys = variables.filter((v) => v.key !== key).map((v) => v.key);
     setRemovingKey(key);
     try {
       await handleRefine(
-        `Remove the {{${key}}} variable ("${variable?.label ?? key}") entirely, and rewrite every sentence that referenced it as ` +
-          `genuinely natural prose that reads as if that value had never been a variable at all. Do not just strip the {{}} braces ` +
-          `and leave "${key}" sitting in the sentence as bare text, and do not replace it with a bracket like [${key}] — neither of ` +
-          `those is a reword, both are broken text. For example, a step reading "Enter the value: {{${key}}} and continue." should ` +
-          `become something like "Enter the value and continue." — a normal sentence with no braces, brackets, or "${key}" visible anywhere.`
+        `Remove ONLY the {{${key}}} variable ("${variable?.label ?? key}") and nothing else. Rewrite every sentence that referenced ` +
+          `it as genuinely natural prose that reads as if that value had never been a variable at all — do not just strip the {{}} ` +
+          `braces and leave "${key}" sitting in the sentence as bare text, and do not replace it with a bracket like [${key}] — ` +
+          `neither of those is a reword, both are broken text. For example, a step reading "Enter the value: {{${key}}} and continue." ` +
+          `should become something like "Enter the value and continue." — a normal sentence with no braces, brackets, or "${key}" ` +
+          `visible anywhere. Every other {{variable}} in the document — every one besides {{${key}}} — must remain completely ` +
+          `untouched: same key, same braces, same wording around it, appearing in variables[] exactly as before. Do not regenerate, ` +
+          `reword, or restructure anything this instruction doesn't ask for.`,
+        otherKeys
       );
     } finally {
       setRemovingKey(null);

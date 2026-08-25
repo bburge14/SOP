@@ -158,7 +158,8 @@ Rules:
 - When an instruction removes a variable, rewrite every sentence that referenced it as genuinely natural prose with no trace of the removal mechanism left behind. Stripping the {{}} braces and leaving the bare variable name, or replacing it with a bracket like [variable_name], is NOT a reword — that is broken text, worse than the placeholder it replaced.
   WRONG: "Enter the Serial Number: switch_serial_number and click Continue." or "Enter the Serial Number: [switch_serial_number] and click Continue."
   RIGHT: "Enter the switch's serial number and click Continue."
-  The result must read exactly like a sentence a person would actually write, as if that value had never been a variable at all.`;
+  The result must read exactly like a sentence a person would actually write, as if that value had never been a variable at all.
+  Critically, this applies to that ONE named variable only — every other {{variable}} in the document, and its entry in variables[], must come back completely unchanged: same key, same braces, same surrounding wording. Removing one variable is never a reason to touch, reword, or drop any other one, even if several variables appear in the same sentence or nearby steps.`;
 
 export function buildRefinePrompt(document: string, priorInstructions: string[], newInstruction: string): string {
   const historyBlock =
