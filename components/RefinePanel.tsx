@@ -26,11 +26,24 @@ export default function RefinePanel({ open, onClose, history, onSubmit, refining
   const [instruction, setInstruction] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const historyEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   useOnClickOutside(panelRef, onClose, open && !refining);
 
   useEffect(() => {
     if (open) historyEndRef.current?.scrollIntoView({ block: "end" });
   }, [open, history.length]);
+
+  // The input is disabled while a request is in flight, which makes the
+  // browser auto-blur it — without this, focus is silently dropped to
+  // <body> once the request finishes and typing the next instruction does
+  // nothing until you click back into the field.
+  const wasRefining = useRef(refining);
+  useEffect(() => {
+    if (wasRefining.current && !refining && open) {
+      inputRef.current?.focus();
+    }
+    wasRefining.current = refining;
+  }, [refining, open]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -87,6 +100,7 @@ export default function RefinePanel({ open, onClose, history, onSubmit, refining
         <form onSubmit={handleSubmit} className="border-t border-border p-4 space-y-2">
           <div className="flex gap-2">
             <input
+              ref={inputRef}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               placeholder="What would you like changed?"

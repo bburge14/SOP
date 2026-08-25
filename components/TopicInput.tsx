@@ -9,6 +9,7 @@ import {
   MessageCircleQuestion,
   Paperclip,
   ShieldAlert,
+  SlidersHorizontal,
   Sparkles,
   Upload,
   X,
@@ -18,7 +19,7 @@ import CategoryProfilePanel from "@/components/CategoryProfilePanel";
 import type { CategoryProfileDefault, ContextAttachment, SopIdea } from "@/types/sop";
 
 interface TopicInputProps {
-  onSubmit: (topic: string) => void;
+  onSubmit: (topic: string, draftSteps?: string) => void;
   onStartGuided: (topic: string) => void;
   askingGuidedQuestions: boolean;
   onImport: (file: File) => void;
@@ -64,6 +65,8 @@ export default function TopicInput({
   onCategoryProfileSaved,
 }: TopicInputProps) {
   const [topic, setTopic] = useState(initialValue);
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [draftSteps, setDraftSteps] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextInputRef = useRef<HTMLInputElement>(null);
   const ideasPanelRef = useRef<HTMLDivElement>(null);
@@ -87,7 +90,7 @@ export default function TopicInput({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!topic.trim() || loading) return;
-    onSubmit(topic.trim());
+    onSubmit(topic.trim(), advancedMode ? draftSteps.trim() || undefined : undefined);
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -103,6 +106,16 @@ export default function TopicInput({
 
   return (
     <div>
+      <div className="flex items-center gap-1 mb-2">
+        <SegmentButton active={!advancedMode} onClick={() => setAdvancedMode(false)}>
+          Simple
+        </SegmentButton>
+        <SegmentButton active={advancedMode} onClick={() => setAdvancedMode(true)}>
+          <SlidersHorizontal className="size-3" />
+          Advanced
+        </SegmentButton>
+      </div>
+
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           value={topic}
@@ -111,28 +124,30 @@ export default function TopicInput({
           className="flex-1 bg-panel border border-border rounded-lg px-4 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
           disabled={loading}
         />
-        <div className="flex gap-2">
-          <input
-            list="category-suggestions"
-            value={category}
-            onChange={(e) => onCategoryChange(e.target.value)}
-            placeholder="Category (optional)"
-            title="Tell the AI what category this SOP belongs to — if you've saved a profile for it, its context and remembered defaults are used automatically"
-            className="w-40 bg-panel border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-            disabled={loading}
-          />
-          <datalist id="category-suggestions">
-            {categorySuggestions.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-          <CategoryProfilePanel
-            category={category.trim()}
-            reviewCandidates={reviewCandidates}
-            onReviewCandidatesHandled={onReviewCandidatesHandled}
-            onSaved={onCategoryProfileSaved}
-          />
-        </div>
+        {advancedMode && (
+          <div className="flex gap-2">
+            <input
+              list="category-suggestions"
+              value={category}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              placeholder="Category (optional)"
+              title="Tell the AI what category this SOP belongs to — if you've saved a profile for it, its context and remembered defaults are used automatically"
+              className="w-40 bg-panel border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              disabled={loading}
+            />
+            <datalist id="category-suggestions">
+              {categorySuggestions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <CategoryProfilePanel
+              category={category.trim()}
+              reviewCandidates={reviewCandidates}
+              onReviewCandidatesHandled={onReviewCandidatesHandled}
+              onSaved={onCategoryProfileSaved}
+            />
+          </div>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -150,32 +165,36 @@ export default function TopicInput({
           <Upload className="size-4" />
           Import
         </button>
-        <input
-          ref={contextInputRef}
-          type="file"
-          multiple
-          onChange={handleContextFilesChange}
-          className="hidden"
-        />
-        <button
-          type="button"
-          onClick={() => contextInputRef.current?.click()}
-          disabled={loading}
-          title="Attach README/source/config files as reference material for the AI — useful for internal or non-public programs it has no other knowledge of"
-          className="flex items-center gap-2 border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
-        >
-          <Paperclip className="size-4" />
-          Attach Reference
-        </button>
-        <button
-          type="button"
-          onClick={() => topic.trim() && !loading && !askingGuidedQuestions && onStartGuided(topic.trim())}
-          disabled={loading || askingGuidedQuestions || !topic.trim()}
-          title="Not sure how to structure this SOP? Get asked a few clarifying questions first (vendor, environment, conventions), then generate from your answers."
-          className="flex items-center justify-center size-9 shrink-0 rounded-lg border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {askingGuidedQuestions ? <Loader2 className="size-4 animate-spin" /> : <MessageCircleQuestion className="size-4" />}
-        </button>
+        {advancedMode && (
+          <>
+            <input
+              ref={contextInputRef}
+              type="file"
+              multiple
+              onChange={handleContextFilesChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => contextInputRef.current?.click()}
+              disabled={loading}
+              title="Attach README/source/config files as reference material for the AI — useful for internal or non-public programs it has no other knowledge of"
+              className="flex items-center gap-2 border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <Paperclip className="size-4" />
+              Attach Reference
+            </button>
+            <button
+              type="button"
+              onClick={() => topic.trim() && !loading && !askingGuidedQuestions && onStartGuided(topic.trim())}
+              disabled={loading || askingGuidedQuestions || !topic.trim()}
+              title="Not sure how to structure this SOP? Get asked a few clarifying questions first (vendor, environment, conventions), then generate from your answers."
+              className="flex items-center justify-center size-9 shrink-0 rounded-lg border border-border text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {askingGuidedQuestions ? <Loader2 className="size-4 animate-spin" /> : <MessageCircleQuestion className="size-4" />}
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={onStartBlank}
@@ -195,6 +214,17 @@ export default function TopicInput({
           {loading ? "Generating…" : "Generate SOP"}
         </button>
       </form>
+
+      {advancedMode && (
+        <textarea
+          value={draftSteps}
+          onChange={(e) => setDraftSteps(e.target.value)}
+          placeholder="Optional: paste your own draft steps here. The AI will treat this as the real raw material for the procedure — formalizing structure, interaction mode, bolded UI elements, and variables — instead of inventing generic content from just the topic above."
+          rows={4}
+          disabled={loading}
+          className="w-full mt-2 bg-panel border border-border rounded-lg px-4 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 resize-y"
+        />
+      )}
 
       {contextFiles.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 mt-2 px-0.5">
@@ -275,5 +305,19 @@ export default function TopicInput({
         </span>
       </p>
     </div>
+  );
+}
+
+function SegmentButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+        active ? "bg-panel border border-border text-white" : "text-slate-500 hover:text-slate-300"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

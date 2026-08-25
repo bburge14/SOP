@@ -135,6 +135,13 @@ body {
   @apply bg-indigo-500/40 ring-1 ring-indigo-400/70;
 }
 
+/* Arrow-key occurrence navigation (VariableForm's up/down per field):
+   stronger than .sop-var-highlight so the one specific occurrence you just
+   jumped to is visually distinct from the rest of that field's matches. */
+.sop-var-nav-active {
+  @apply bg-amber-500/40 ring-2 ring-amber-400/80;
+}
+
 /* #print-target (MarkdownPreview.tsx) is always mounted now, regardless of
    which tab (Rendered/Source) is active, so Export PDF/print doesn't
    depend on the live editor being the visible one — normally invisible

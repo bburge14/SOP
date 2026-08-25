@@ -52,13 +52,16 @@ For any step that is destructive, hard to reverse, or broad in effect (partition
 
 If the user prompt includes attached reference material about a specific tool, program, or environment (delimited below as "Reference material"), treat it as the authoritative source of truth for that tool's actual behavior, commands, flags, config syntax, and options — this is often an internal or non-public program you have no other knowledge of. Prefer facts from the reference material over generic assumptions or knowledge of similar-sounding tools, and do not invent commands, flags, or behavior that the material doesn't support or that contradicts it. Where the material doesn't cover something the SOP needs, fall back to clearly-generic best practice, written with the same plain confidence as everything else — never a flagged guess.
 
-If a "Category profile" block is included below, it's environment context the user has already told this app about every SOP in that category (e.g. their AD domain, ticketing system, standard VLAN scheme) — treat its facts as authoritative ground truth, same as attached reference material, and use it to write concrete steps and fill in real values instead of generic placeholders where it gives you one. Set the \`category\` field in your response to exactly the category name given, don't rename or re-derive it.`;
+If a "Category profile" block is included below, it's environment context the user has already told this app about every SOP in that category (e.g. their AD domain, ticketing system, standard VLAN scheme) — treat its facts as authoritative ground truth, same as attached reference material, and use it to write concrete steps and fill in real values instead of generic placeholders where it gives you one. Set the \`category\` field in your response to exactly the category name given, don't rename or re-derive it.
+
+If a "Draft steps" block is included below, the user has already written down the actual steps of this procedure themselves — that is real raw material, not a topic description, and takes priority over anything you'd otherwise invent. Your job is to formalize it: reorganize it into the required seven-section structure, fix ordering/gaps only where truly needed, apply the real interaction mode and UI-element bolding, identify and parameterize the genuinely site/user-specific values, and write it with the same polish as a normal SOP — but do not invent a different procedure, skip steps the user listed, or replace their specifics with generic ones. If the draft is missing something a section needs (e.g. no rollback steps given), fill the gap using standard best practice for that kind of procedure, written with the same plain confidence as everything else.`;
 
 export function buildUserPrompt(
   topic: string,
   context: ContextAttachment[] = [],
   categoryProfile?: { category: string; context: string },
-  clarifications?: { question: string; answer: string }[]
+  clarifications?: { question: string; answer: string }[],
+  draftSteps?: string
 ): string {
   const contextBlock =
     context.length > 0
@@ -78,7 +81,11 @@ export function buildUserPrompt(
         answered.map((c) => `Q: ${c.question}\nA: ${c.answer.trim()}`).join("\n\n") +
         `\n---`
       : "";
-  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}${clarificationsBlock}`;
+  const draftStepsBlock =
+    draftSteps && draftSteps.trim()
+      ? `\n\n---\nDraft steps written by the user — this is the actual raw material for this procedure, not just a topic description (see system instructions on how to use this):\n\n${draftSteps.trim()}\n---`
+      : "";
+  return `Generate a complete SOP for the following task/technology/procedure:\n\n${topic.trim()}${categoryLine}${contextBlock}${categoryBlock}${clarificationsBlock}${draftStepsBlock}`;
 }
 
 // Used by the optional "Scan with AI" action on an imported document — the

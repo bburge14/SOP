@@ -21,6 +21,10 @@ interface MarkdownPreviewProps {
   onModeChange: (mode: PreviewMode) => void;
   hoveredKey: string | null;
   hoverHighlightEnabled: boolean;
+  /** Field currently being stepped through via VariableForm's up/down occurrence-nav, if any. */
+  activeNavKey: string | null;
+  /** 0-based index into that field's occurrences to scroll to and highlight. */
+  activeNavIndex: number;
 }
 
 export default function MarkdownPreview({
@@ -32,6 +36,8 @@ export default function MarkdownPreview({
   onModeChange,
   hoveredKey,
   hoverHighlightEnabled,
+  activeNavKey,
+  activeNavIndex,
 }: MarkdownPreviewProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveEditorRef = useRef<LiveMarkdownEditorHandle>(null);
@@ -68,6 +74,28 @@ export default function MarkdownPreview({
 
     return () => matches.forEach((el) => el.classList.remove("sop-var-highlight"));
   }, [hoveredKey, hoverHighlightEnabled, mode]);
+
+  // Arrow-key "jump to occurrence" (VariableForm's up/down per field) — same
+  // scrollBy-only approach as the hover effect above, and for the same
+  // reason: scrollIntoView can nudge ancestor scroll containers too, which
+  // previously desynced the hover highlight mid-scroll.
+  useEffect(() => {
+    if (!activeNavKey || mode !== "preview") return;
+    const container = liveEditorRef.current?.getScrollElement();
+    if (!container) return;
+    const selector = `[data-sop-var="${CSS.escape(activeNavKey)}"]`;
+    const matches = container.querySelectorAll<HTMLElement>(selector);
+    const target = matches[activeNavIndex];
+    if (!target) return;
+    target.classList.add("sop-var-nav-active");
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const delta = targetRect.top - containerRect.top - container.clientHeight / 2 + targetRect.height / 2;
+    container.scrollBy({ top: delta, behavior: "smooth" });
+
+    return () => target.classList.remove("sop-var-nav-active");
+  }, [activeNavKey, activeNavIndex, mode]);
 
   return (
     <div className="flex flex-col h-full">

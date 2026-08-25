@@ -82,6 +82,32 @@ export default function SopWorkspace() {
   // uses for window.electronAPI, to avoid an SSR/client hydration mismatch.
   const [hoverHighlightEnabled, setHoverHighlightEnabled] = useState(true);
   useEffect(() => setHoverHighlightEnabled(readHoverHighlightEnabled()), []);
+  // "Jump to occurrence" for a field with multiple {{key}} uses in the
+  // document — up/down (buttons or arrow keys on the focused field row)
+  // step through them one at a time, like Ctrl+F's next/previous match.
+  // Separate from hoveredKey (which just highlights on mouse hover): this
+  // is deliberate/keyboard-driven and persists until you navigate a
+  // different field.
+  const [activeNav, setActiveNav] = useState<{ key: string; index: number } | null>(null);
+  const occurrenceCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const v of variables) {
+      const re = new RegExp(`\\{\\{\\s*${v.key}\\s*\\}\\}`, "g");
+      counts[v.key] = (template.match(re) ?? []).length;
+    }
+    return counts;
+  }, [template, variables]);
+  function handleNavigateOccurrence(key: string, direction: 1 | -1) {
+    const count = occurrenceCounts[key] ?? 0;
+    if (count === 0) return;
+    setActiveNav((prev) => {
+      if (!prev || prev.key !== key) return { key, index: direction === 1 ? 0 : count - 1 };
+      return { key, index: (prev.index + direction + count) % count };
+    });
+  }
+  function handleFocusFieldNav(key: string) {
+    setActiveNav((prev) => (prev && prev.key === key ? prev : { key, index: 0 }));
+  }
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [contextFiles, setContextFiles] = useState<ContextAttachment[]>([]);
   // Self-hosted (no window.electronAPI) skips straight to "ready" — this
@@ -155,14 +181,19 @@ export default function SopWorkspace() {
 
   const hasSop = meta !== null;
 
-  async function generate(newTopic: string, clarifications?: { question: string; answer: string }[]) {
+  async function generate(
+    newTopic: string,
+    clarifications?: { question: string; answer: string }[],
+    draftSteps?: string
+  ) {
     setLoading(true);
     setError(null);
     setErrorDetail(null);
     try {
       // contextFiles are already redacted at attach time (handleAddContextFiles) —
-      // only the topic and freshly-typed clarification answers still need it here.
+      // only the topic, freshly-typed draft steps, and clarification answers still need it here.
       const { text: redactedTopic } = redactSecrets(newTopic);
+      const redactedDraftSteps = draftSteps ? redactSecrets(draftSteps).text : undefined;
       const redactedClarifications = clarifications?.map((c) => ({ question: c.question, answer: redactSecrets(c.answer).text }));
       const trimmedCategory = category.trim();
       const profile = trimmedCategory ? await getCategoryProfile(trimmedCategory) : undefined;
@@ -174,6 +205,7 @@ export default function SopWorkspace() {
           context: contextFiles,
           categoryProfile: trimmedCategory ? { category: trimmedCategory, context: profile?.context ?? "" } : undefined,
           clarifications: redactedClarifications,
+          draftSteps: redactedDraftSteps,
         }),
       });
       const data = await res.json();
@@ -877,7 +909,7 @@ export default function SopWorkspace() {
       />
 
       <TopicInput
-        onSubmit={(t) => void generate(t)}
+        onSubmit={(t, draftSteps) => void generate(t, undefined, draftSteps)}
         onStartGuided={(t) => void handleStartGuided(t)}
         askingGuidedQuestions={askingGuidedQuestions}
         onImport={(f) => void handleImport(f)}
@@ -992,6 +1024,11 @@ export default function SopWorkspace() {
                 onHoverField={hoverHighlightEnabled ? setHoveredKey : undefined}
                 disabled={refining}
                 removingKey={removingKey}
+                occurrenceCounts={occurrenceCounts}
+                activeNavKey={activeNav?.key ?? null}
+                activeNavIndex={activeNav?.index ?? 0}
+                onNavigateOccurrence={handleNavigateOccurrence}
+                onFocusField={handleFocusFieldNav}
               />
             </div>
           </div>
@@ -1024,6 +1061,8 @@ export default function SopWorkspace() {
               onModeChange={setPreviewMode}
               hoveredKey={hoveredKey}
               hoverHighlightEnabled={hoverHighlightEnabled}
+              activeNavKey={activeNav?.key ?? null}
+              activeNavIndex={activeNav?.index ?? 0}
             />
           </div>
         </div>

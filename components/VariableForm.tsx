@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import type { SopVariable, VariableValues } from "@/types/sop";
 
 interface VariableFormProps {
@@ -13,6 +13,16 @@ interface VariableFormProps {
   disabled?: boolean;
   /** The specific field whose Remove button triggered the in-flight call, if any — shown with a spinner instead of the plain disabled X. */
   removingKey?: string | null;
+  /** How many {{key}} occurrences each field has in the current template — drives whether the up/down occurrence-nav shows at all. */
+  occurrenceCounts?: Record<string, number>;
+  /** Which field's occurrences are currently being stepped through, if any. */
+  activeNavKey?: string | null;
+  /** 0-based index into that field's occurrences the user last jumped to. */
+  activeNavIndex?: number;
+  /** Step to the next (1) or previous (-1) occurrence of this field in the document. */
+  onNavigateOccurrence?: (key: string, direction: 1 | -1) => void;
+  /** Fires when a field row gains keyboard focus, so arrow keys have something to act on immediately. */
+  onFocusField?: (key: string) => void;
 }
 
 export default function VariableForm({
@@ -23,6 +33,11 @@ export default function VariableForm({
   onHoverField,
   disabled = false,
   removingKey = null,
+  occurrenceCounts = {},
+  activeNavKey = null,
+  activeNavIndex = 0,
+  onNavigateOccurrence,
+  onFocusField,
 }: VariableFormProps) {
   if (variables.length === 0) {
     return <p className="text-sm text-slate-500">No variables yet. Generate an SOP to populate this form.</p>;
@@ -32,10 +47,23 @@ export default function VariableForm({
     <div className="space-y-4">
       {variables.map((variable) => {
         const isRemoving = removingKey === variable.key;
+        const count = occurrenceCounts[variable.key] ?? 0;
+        const isActive = activeNavKey === variable.key;
         return (
           <div
             key={variable.key}
-            className="group"
+            className="group rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+            tabIndex={0}
+            onFocus={() => onFocusField?.(variable.key)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                onNavigateOccurrence?.(variable.key, 1);
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                onNavigateOccurrence?.(variable.key, -1);
+              }
+            }}
             onMouseEnter={() => onHoverField?.(variable.key)}
             onMouseLeave={() => onHoverField?.(null)}
           >
@@ -44,6 +72,32 @@ export default function VariableForm({
                 {variable.label}
               </label>
               <div className="flex items-center gap-2">
+                {count > 1 && (
+                  <div
+                    className="flex items-center gap-0.5 text-[10px] text-slate-500"
+                    title="Step through this field's occurrences in the document"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onNavigateOccurrence?.(variable.key, -1)}
+                      className="hover:text-white p-0.5"
+                      aria-label={`Previous occurrence of ${variable.key}`}
+                    >
+                      <ChevronUp className="size-3" />
+                    </button>
+                    <span className="tabular-nums">
+                      {isActive ? activeNavIndex + 1 : 1}/{count}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateOccurrence?.(variable.key, 1)}
+                      className="hover:text-white p-0.5"
+                      aria-label={`Next occurrence of ${variable.key}`}
+                    >
+                      <ChevronDown className="size-3" />
+                    </button>
+                  </div>
+                )}
                 <code className="text-[11px] text-slate-500">{`{{${variable.key}}}`}</code>
                 <button
                   type="button"

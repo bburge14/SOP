@@ -15,14 +15,16 @@ export const dynamic = "force-dynamic";
 const MAX_CATEGORY_CONTEXT_CHARS = 5000;
 const MAX_CLARIFICATIONS = 8;
 const MAX_CLARIFICATION_ANSWER_CHARS = 1000;
+const MAX_DRAFT_STEPS_CHARS = 20000;
 
 export async function POST(req: NextRequest) {
   let topic: unknown;
   let context: unknown;
   let categoryProfile: unknown;
   let clarifications: unknown;
+  let draftSteps: unknown;
   try {
-    ({ topic, context, categoryProfile, clarifications } = await req.json());
+    ({ topic, context, categoryProfile, clarifications, draftSteps } = await req.json());
   } catch {
     return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
   }
@@ -46,11 +48,14 @@ export async function POST(req: NextRequest) {
   const validatedClarifications = validateClarifications(clarifications);
   if (validatedClarifications instanceof NextResponse) return validatedClarifications;
 
+  const validatedDraftSteps = validateDraftSteps(draftSteps);
+  if (validatedDraftSteps instanceof NextResponse) return validatedDraftSteps;
+
   try {
     const adapter = getLlmAdapter();
     const raw = await adapter.generate(
       SOP_SYSTEM_PROMPT,
-      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile, validatedClarifications),
+      buildUserPrompt(topic, contextAttachments, validatedCategoryProfile, validatedClarifications, validatedDraftSteps),
       sopJsonSchema
     );
     const parsed = extractAndParseJson(raw);
@@ -170,6 +175,22 @@ function validateClarifications(
     validated.push({ question, answer });
   }
   return validated;
+}
+
+/** Returns the validated draft-steps string, undefined if omitted, or a ready-to-return 400 response on bad input. */
+function validateDraftSteps(draftSteps: unknown): string | undefined | NextResponse {
+  if (draftSteps === undefined || draftSteps === null) return undefined;
+  if (typeof draftSteps !== "string") {
+    return NextResponse.json({ error: "`draftSteps` must be a string." }, { status: 400 });
+  }
+  if (!draftSteps.trim()) return undefined;
+  if (draftSteps.length > MAX_DRAFT_STEPS_CHARS) {
+    return NextResponse.json(
+      { error: `Draft steps must be ${MAX_DRAFT_STEPS_CHARS.toLocaleString()} characters or fewer.` },
+      { status: 400 }
+    );
+  }
+  return draftSteps;
 }
 
 function statusFor(err: unknown): number {
