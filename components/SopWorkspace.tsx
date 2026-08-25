@@ -121,6 +121,15 @@ export default function SopWorkspace() {
   // the very first generation, not just after you've already got a document.
   const [category, setCategory] = useState("");
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
+  // The document type (SOP vs. SLA) the next Generate/Regenerate uses —
+  // lifted here (not left as TopicInput's own local state) specifically so
+  // Regenerate remembers it. Reported live: generating an SLA, then later
+  // regenerating from ActionBar's Regenerate button (a different code path
+  // than TopicInput's own form) silently produced SOP-formatted content,
+  // because handleRegenerate had no access to whatever documentType the
+  // topic bar's toggle was last set to — it always called generate() with
+  // no documentType at all, which defaults to "sop" server-side.
+  const [documentType, setDocumentType] = useState<DocumentType>("sop");
   // Field values you actually changed from the AI's default, proposed for
   // saving into the category's profile right after Save to Library —
   // reviewed/approved in CategoryProfilePanel, never written automatically.
@@ -182,11 +191,20 @@ export default function SopWorkspace() {
 
   const hasSop = meta !== null;
 
+  // `documentType` (SOP vs. SLA) is read directly from state, not passed as
+  // a parameter — it's controlled state shared with TopicInput's toggle
+  // (same pattern as `category`), so every caller (Generate, Regenerate,
+  // Guided's submit/skip) automatically uses whatever the toggle is
+  // currently set to, with no risk of a caller silently forgetting to
+  // thread it through. That's exactly the bug this replaced: Regenerate
+  // and the Guided flow used to call generate() with no documentType at
+  // all, which defaulted to "sop" server-side regardless of what the
+  // topic bar's toggle showed — reported live as an SLA regenerating (or
+  // completing the Guided flow) into SOP-formatted content.
   async function generate(
     newTopic: string,
     clarifications?: { question: string; answer: string }[],
-    draftSteps?: string,
-    documentType?: DocumentType
+    draftSteps?: string
   ) {
     setLoading(true);
     setError(null);
@@ -970,7 +988,9 @@ export default function SopWorkspace() {
       />
 
       <TopicInput
-        onSubmit={(t, draftSteps, documentType) => void generate(t, undefined, draftSteps, documentType)}
+        onSubmit={(t, draftSteps) => void generate(t, undefined, draftSteps)}
+        documentType={documentType}
+        onDocumentTypeChange={setDocumentType}
         onStartGuided={(t) => void handleStartGuided(t)}
         askingGuidedQuestions={askingGuidedQuestions}
         onImport={(f) => void handleImport(f)}

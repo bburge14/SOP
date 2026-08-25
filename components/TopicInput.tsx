@@ -21,7 +21,9 @@ import type { CategoryProfileDefault, ContextAttachment, SopIdea } from "@/types
 import type { DocumentType } from "@/lib/llm/prompt";
 
 interface TopicInputProps {
-  onSubmit: (topic: string, draftSteps?: string, documentType?: DocumentType) => void;
+  onSubmit: (topic: string, draftSteps?: string) => void;
+  documentType: DocumentType;
+  onDocumentTypeChange: (documentType: DocumentType) => void;
   onStartGuided: (topic: string) => void;
   askingGuidedQuestions: boolean;
   onImport: (file: File) => void;
@@ -46,6 +48,8 @@ interface TopicInputProps {
 
 export default function TopicInput({
   onSubmit,
+  documentType,
+  onDocumentTypeChange,
   onStartGuided,
   askingGuidedQuestions,
   onImport,
@@ -67,7 +71,6 @@ export default function TopicInput({
   onCategoryProfileSaved,
 }: TopicInputProps) {
   const [topic, setTopic] = useState(initialValue);
-  const [documentType, setDocumentType] = useState<DocumentType>("sop");
   const [advancedMode, setAdvancedMode] = useState(false);
   const [draftSteps, setDraftSteps] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,7 +96,7 @@ export default function TopicInput({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!topic.trim() || loading) return;
-    onSubmit(topic.trim(), advancedMode ? draftSteps.trim() || undefined : undefined, documentType);
+    onSubmit(topic.trim(), advancedMode ? draftSteps.trim() || undefined : undefined);
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -111,10 +114,10 @@ export default function TopicInput({
     <div>
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-1">
-          <SegmentButton active={documentType === "sop"} onClick={() => setDocumentType("sop")}>
+          <SegmentButton active={documentType === "sop"} onClick={() => onDocumentTypeChange("sop")}>
             SOP
           </SegmentButton>
-          <SegmentButton active={documentType === "sla"} onClick={() => setDocumentType("sla")}>
+          <SegmentButton active={documentType === "sla"} onClick={() => onDocumentTypeChange("sla")}>
             <Timer className="size-3" />
             SLA
           </SegmentButton>
