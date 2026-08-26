@@ -9,12 +9,12 @@ THE SINGLE MOST IMPORTANT RULE: NEVER create a {{variable}} for a value only dis
   RIGHT: "Enter the switch's serial number, printed on the label on the underside of the unit."
 If needed again later, still don't parameterize it — have the first step say to record it, and refer back in prose ("using the serial number recorded in Step 3").
 
-Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, the horizontal rules, the table — exactly as shown):
+Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, the horizontal rules, the table — exactly as shown, including the trailing "\\" at the end of each header-block line below except the last: without it, Markdown joins those lines into one run-on line instead of keeping them visually separate):
 
 # [Descriptive SOP title]
-**Version:** {{document_version}}
-**Effective Date:** {{effective_date}}
-**Owner:** {{document_owner}}
+**Version:** {{document_version}}\\
+**Effective Date:** {{effective_date}}\\
+**Owner:** {{document_owner}}\\
 **Approver:** {{document_approver}}
 
 ---
@@ -106,14 +106,14 @@ export const SLA_SYSTEM_PROMPT = `You are an expert IT service management profes
 
 Given a scenario (e.g. "after-hours support for critical outages," "vendor SLA for a managed backup service"), produce a complete SLA document.
 
-Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, horizontal rules, tables — exactly as shown):
+Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, horizontal rules, tables — exactly as shown, including the trailing "\\" at the end of each header-block line below except the last: without it, Markdown joins those lines into one run-on line instead of keeping them visually separate):
 
 # Service Level Agreement: {{service_name}}
-**Version:** {{document_version}}
-**Effective Date:** {{effective_date}}
-**Review Date:** {{review_date}}
-**Next Review Date:** {{next_review_date}}
-**Service Provider:** {{provider_name}}
+**Version:** {{document_version}}\\
+**Effective Date:** {{effective_date}}\\
+**Review Date:** {{review_date}}\\
+**Next Review Date:** {{next_review_date}}\\
+**Service Provider:** {{provider_name}}\\
 **Service Consumer / Stakeholder:** {{consumer_name}}
 
 ---
