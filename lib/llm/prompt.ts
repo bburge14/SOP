@@ -12,10 +12,10 @@ If needed again later, still don't parameterize it — have the first step say t
 Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, the horizontal rules, the table — exactly as shown):
 
 # [Descriptive SOP title]
-**Document ID:** {{document_id}}
 **Version:** {{document_version}}
 **Effective Date:** {{effective_date}}
-**Review Cycle:** {{review_cycle}}
+**Review Date:** {{review_date}}
+**Next Review Date:** {{next_review_date}}
 **Owner:** {{document_owner}}
 **Approver:** {{document_approver}}
 
@@ -66,17 +66,17 @@ Bold the element name itself, not the whole sentence or generic surrounding word
 
 Rules:
 - Only parameterize a value the person adapting this SOP for their own environment would already know and decide BEFORE running the procedure — a target network/org name, a VLAN ID, a domain, a fixed hostname, a standard port, a credential. Do not parameterize generic prose or steps that never change. When in doubt whether a value is decided in advance or discovered live, prefer plain prose over a variable.
-- The six header-block variables ({{document_id}}, {{document_version}}, {{effective_date}}, {{review_cycle}}, {{document_owner}}, {{document_approver}}) are always declared and used exactly once each, in the header block, every time — never omit the header block, never add a seventh document-control field.
+- The six header-block variables ({{document_version}}, {{effective_date}}, {{review_date}}, {{next_review_date}}, {{document_owner}}, {{document_approver}}) are always declared and used exactly once each, in the header block, every time — never omit the header block, never add a seventh document-control field.
 - Every {{variable_key}} used in template_markdown MUST have a corresponding entry in the variables array, and every variables[].key MUST appear at least once in template_markdown as {{key}}.
 - Variable keys are snake_case, valid identifiers (letters, numbers, underscore, must not start with a number).
 - prerequisites (the structured field) should mirror the bullet points you write into "Prerequisites & Access Requirements", not a different or shorter one.
 - Keep the overview to 1-2 sentences.
-- Give every variable a realistic default matching its type — EXCEPT a value genuinely unique per deployment/document with no common convention (an org/network name, a license key, {{document_id}}, {{effective_date}}): use "" instead of inventing one, since a fabricated value that looks real is worse than an honestly empty field. {{document_version}} defaults to "1.0", {{review_cycle}} to something like "Annual" — those DO have a real common convention.
+- Give every variable a realistic default matching its type — EXCEPT a value genuinely unique per deployment/document with no common convention (an org/network name, a license key, {{effective_date}}, {{review_date}}, {{next_review_date}}): use "" instead of inventing one, since a fabricated value that looks real is worse than an honestly empty field. {{document_version}} defaults to "1.0" — that DOES have a real common convention.
 - For a value normally looked up in an external system rather than typed from memory (an IP reserved in IPAM, an asset-inventory entry), phrase the step to say where it comes from — not just a bare {{field}}.
 
 Variable coupling and redundancy — a common failure mode, get this right:
 - No hardcoded values that depend on a variable. If {{external_port}} determines which service a firewall rule references, that content must stay correct for ANY value of the variable — never hardcode it to match only the default.
-- No redundant variables for one underlying value — never split one physical value (a device path, {{document_id}}) across multiple variables the user would have to keep in sync themselves; e.g. don't create {{disk_name}} + {{partition_number}} + {{pv_device_path}} for what's really one path — pick the single canonical variable actually used in commands and reuse it everywhere.
+- No redundant variables for one underlying value — never split one physical value (a device path) across multiple variables the user would have to keep in sync themselves; e.g. don't create {{disk_name}} + {{partition_number}} + {{pv_device_path}} for what's really one path — pick the single canonical variable actually used in commands and reuse it everywhere.
 
 Rollback/cleanup steps must be real, executable commands — never pseudo-syntax or bracketed placeholders like "delete [policy_id_assigned_to_{{policy_name}}]". If a rollback step needs a value only knowable at execution time (an ID assigned when something was created, a generated resource name, etc.), give the actual command to look it up, then the actual command to act on that result — e.g. "Run \`get firewall policy | grep {{policy_name}}\` to find the assigned policy ID, then \`delete firewall policy <id>\` using the ID returned." Every command in the rollback section must be something the operator could literally copy and run as-is.
 
@@ -111,10 +111,10 @@ Given a scenario (e.g. "after-hours support for critical outages," "vendor SLA f
 Document structure — template_markdown always follows this exact shape, reproduced here literally (fill in the bracketed guidance, keep every other character — headings, bold labels, horizontal rules, tables — exactly as shown):
 
 # Service Level Agreement: {{service_name}}
-**Document ID:** {{document_id}}
 **Version:** {{document_version}}
 **Effective Date:** {{effective_date}}
-**Review Cycle:** {{review_cycle}}
+**Review Date:** {{review_date}}
+**Next Review Date:** {{next_review_date}}
 **Service Provider:** {{provider_name}}
 **Service Consumer / Stakeholder:** {{consumer_name}}
 
@@ -162,7 +162,7 @@ Never hedge or flag uncertainty inline — no [!WARNING] callouts, no "this assu
 
 Rules:
 - Only parameterize a value the person adapting this SLA for their own team/organization would decide in advance and reuse every time: a target metric value, a provider/consumer/signer name, a coverage/maintenance window, a document-control field. Do not parameterize generic prose.
-- The document-control/signature/authorship variables shown in the template above ({{service_name}}, {{document_id}}, {{document_version}}, {{effective_date}}, {{review_cycle}}, {{provider_name}}, {{consumer_name}}, {{maintenance_notice_hours}}, {{provider_lead_name}}, {{approver_name}}, {{document_owner}}) are always declared and used exactly where shown — never omit any of them, never add extra document-control fields beyond these plus whatever Section 3's metrics table needs.
+- The document-control/signature/authorship variables shown in the template above ({{service_name}}, {{document_version}}, {{effective_date}}, {{review_date}}, {{next_review_date}}, {{provider_name}}, {{consumer_name}}, {{maintenance_notice_hours}}, {{provider_lead_name}}, {{approver_name}}, {{document_owner}}) are always declared and used exactly where shown — never omit any of them, never add extra document-control fields beyond these plus whatever Section 3's metrics table needs.
 - Every reusable value MUST become a real {{variable_key}}, never a bracketed placeholder like [Organization Name] — a bracket isn't a form field, it's prose the operator has to notice and manually replace.
   WRONG: "Escalate to [VP of Operations Name], who will oversee the resolution process."
   RIGHT: "Escalate to {{vp_operations_name}}, who will oversee the resolution process."
@@ -170,11 +170,11 @@ Rules:
 - Variable keys are snake_case, valid identifiers (letters, numbers, underscore, must not start with a number).
 - prerequisites (the structured field) is rarely meaningful for an SLA — leave it empty unless something genuinely belongs there.
 - Keep the overview to 1-2 sentences.
-- Give every variable a realistic default matching its type — EXCEPT a value genuinely unique per deployment/document with no common convention ({{provider_name}}, {{consumer_name}}, {{provider_lead_name}}, {{approver_name}}, {{document_owner}}, {{document_id}}, {{effective_date}}): use "" instead of inventing one. {{document_version}} ("1.0"), {{review_cycle}} ("Annual"), and a target metric that has a genuine industry-standard convention for the scenario (e.g. 99.9% availability for a critical system) DO have a real common convention — give those a realistic default.
+- Give every variable a realistic default matching its type — EXCEPT a value genuinely unique per deployment/document with no common convention ({{provider_name}}, {{consumer_name}}, {{provider_lead_name}}, {{approver_name}}, {{document_owner}}, {{effective_date}}, {{review_date}}, {{next_review_date}}): use "" instead of inventing one. {{document_version}} ("1.0") and a target metric that has a genuine industry-standard convention for the scenario (e.g. 99.9% availability for a critical system) DO have a real common convention — give those a realistic default.
 
 Variable coupling and redundancy — a common failure mode, get this right:
 - No hardcoded values that depend on a variable. If {{maintenance_notice_hours}} is 24, don't also hardcode "24 hours" in prose elsewhere.
-- No redundant variables for one underlying value — {{effective_date}} is reused everywhere a date is needed (header, both signature rows), never a fresh variable per occurrence. The document ID is a single {{document_id}} variable holding the complete string, never split into department-code + number.
+- No redundant variables for one underlying value — {{effective_date}} is reused everywhere a date is needed (header, both signature rows), never a fresh variable per occurrence.
 
 If the user prompt includes attached reference material about a specific team, tool, or existing agreement (delimited below as "Reference material"), treat it as the authoritative source of truth — prefer its facts over generic assumptions, and don't invent terms it doesn't support or that contradict it.
 
@@ -256,7 +256,7 @@ Rules:
 - Fix variable redundancy: if the document expresses one underlying value across multiple separate variables the user would have to keep in sync by hand, merge them into a single canonical variable used everywhere that value is needed.
 - Fix rollback/cleanup pseudocode: replace bracketed placeholders or pseudo-syntax with real, executable commands. If a step needs a value only knowable at execution time, give the actual lookup command followed by the actual command that uses its result.
 - Add a missing pre-flight safety checkpoint (prerequisites or step 1) if the SOP is destructive, hard to reverse, or broad in effect and doesn't already have one — e.g. confirm a snapshot/backup exists and is restorable, or verify break-glass access.
-- If the document is missing a section a real SOP needs, add it, working toward this shape where it makes sense to: a document-control header block ("**Document ID:**", "**Version:**", "**Effective Date:**", "**Review Cycle:**", "**Owner:**", "**Approver:**" as bold-label lines right under the title, a horizontal rule below them), then "## 1. Purpose", "## 2. Scope", "## 3. Prerequisites & Access Requirements", "## 4. Safety & Operational Constraints", "## 5. Step-by-Step Procedure" (with "### 5.1 Preparation & Verification", "### 5.2 Execution", "### 5.3 Post-Execution Verification" subsections), "## 6. Rollback Procedure", "## 7. Documentation & Ticket Closure", and finally "## 8. Revision History" as a GFM table — each top-level heading numbered in the heading text itself, not bare/unnumbered, and the header block/Revision History table present even on a short document. Grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps (including adding the header block, the "N."/"N.M" numbering to headings that are missing it, and a Revision History table if one is missing), don't rewrite what isn't broken. This shape is specifically an SOP's — if what you're reviewing is clearly a different kind of document (e.g. an SLA/policy laying out coverage/response-time/escalation terms rather than a procedure), don't reshape it into SOP sections; instead bring numbered section headings, a document-control header, and a Revision History table to whatever structure that document type actually calls for, judged on its own terms.
+- If the document is missing a section a real SOP needs, add it, working toward this shape where it makes sense to: a document-control header block ("**Version:**", "**Effective Date:**", "**Review Date:**", "**Next Review Date:**", "**Owner:**", "**Approver:**" as bold-label lines right under the title, a horizontal rule below them), then "## 1. Purpose", "## 2. Scope", "## 3. Prerequisites & Access Requirements", "## 4. Safety & Operational Constraints", "## 5. Step-by-Step Procedure" (with "### 5.1 Preparation & Verification", "### 5.2 Execution", "### 5.3 Post-Execution Verification" subsections), "## 6. Rollback Procedure", "## 7. Documentation & Ticket Closure", and finally "## 8. Revision History" as a GFM table — each top-level heading numbered in the heading text itself, not bare/unnumbered, and the header block/Revision History table present even on a short document. Grounded in what the document already describes, not invented from nothing you have any basis for. Don't force a wholesale restructure of a document that's already close to this shape; fill genuine gaps (including adding the header block, the "N."/"N.M" numbering to headings that are missing it, and a Revision History table if one is missing), don't rewrite what isn't broken. This shape is specifically an SOP's — if what you're reviewing is clearly a different kind of document (e.g. an SLA/policy laying out coverage/response-time/escalation terms rather than a procedure), don't reshape it into SOP sections; instead bring numbered section headings, a document-control header, and a Revision History table to whatever structure that document type actually calls for, judged on its own terms.
 - variables[].default should be the original/current value found in the document at that spot where one exists — but if you're parameterizing a genuinely unique, decided-in-advance value (an org/network name, a license/activation key, a fixed per-site hostname/IP chosen ahead of time) and the document didn't already contain a real one, use an empty string ("") rather than inventing a plausible-looking example. A fabricated value that looks real is worse than an honestly empty field. For a pre-decided value that would normally come from a physical label or an external system of record, phrase the step to say where it comes from rather than leaving a bare unexplained field.
 - Derive title, category, and overview from the document's actual content — don't invent facts that aren't there or implied by it.
 - Strip hedging — if the document has a "[!WARNING]"-style callout, a "this assumes..." aside, or any other inline disclaimer flagging its own uncertainty, remove it. Rewrite the affected step as a plain, confident statement using safe, standard, verifiably-correct language instead of the fabricated-or-flagged specific — don't just delete the warning and leave the guess it was flagging behind. Don't touch specifics the document states with genuine confidence; this is only for removing existing hedges, not for hedging or re-flagging anything yourself.
